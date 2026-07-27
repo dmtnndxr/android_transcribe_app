@@ -6,10 +6,63 @@ on:
       - 'v*'
     branches:
       - '**'
+  pull_request:
+  # Lets a build be started without pushing, e.g. to re-run after adding
+  # signing secrets.
+  workflow_dispatch:
 
 jobs:
-  build:
+  # Fast, secret-free checks. Runs on every push and PR, including from forks.
+  # Needs no NDK, no Rust toolchain and no speech model, so it finishes in a
+  # couple of minutes and reports real failures long before the heavy job would.
+  verify:
+    name: Tests and type-check
     runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up JDK 17
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+
+    - name: Setup Android SDK
+      uses: android-actions/setup-android@v3
+
+    - name: Cache Gradle
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.gradle/caches
+          ~/.gradle/wrapper
+        key: ${{ runner.os }}-gradle-verify-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+        restore-keys: |
+          ${{ runner.os }}-gradle-verify-
+
+    # The same jars the container image bakes in. org.json is needed because
+    # android.jar ships throwing stubs of it, so JVM tests need the real one.
+    - name: Fetch test libraries
+      run: |
+        mkdir -p "$RUNNER_TEMP/testlibs"
+        curl -fsSL -o "$RUNNER_TEMP/testlibs/json.jar" \
+          https://repo1.maven.org/maven2/org/json/json/20240303/json-20240303.jar
+        curl -fsSL -o "$RUNNER_TEMP/testlibs/junit-console.jar" \
+          https://repo1.maven.org/maven2/org/junit/platform/junit-platform-console-standalone/1.11.3/junit-platform-console-standalone-1.11.3.jar
+
+    # Same script the container runs, so local and CI results can't drift.
+    # OpenRouter live tests stay skipped unless the secret is configured.
+    - name: Run checks
+      env:
+        TESTLIBS: ${{ runner.temp }}/testlibs
+        OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      run: bash tools/verify/verify.sh all
+
+  build:
+    name: Build APK
+    runs-on: ubuntu-latest
+    needs: verify
     permissions:
       contents: write
 
@@ -69,27 +122,53 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-gradle-
 
+    # Forks don't inherit the upstream repo's secrets, so KEYSTORE_BASE64 is
+    # empty there. Decide up front which kind of build is even possible, rather
+    # than discovering it at the packaging step after 30 minutes of compiling.
+    #
+    # Note this must test for a *non-empty* secret: `echo "" | base64 --decode`
+    # exits 0 and writes a zero-byte file, which looks like a valid keystore to
+    # a plain `exists()` check and then fails deep inside the signing task.
+    - name: Determine signing mode
+      id: signing
+      env:
+        KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+      run: |
+        if [ -n "$KEYSTORE_BASE64" ]; then
+          echo "mode=release" >> $GITHUB_OUTPUT
+          echo "Signing secrets present — building a signed release."
+        else
+          echo "mode=debug" >> $GITHUB_OUTPUT
+          echo "No KEYSTORE_BASE64 secret — building a debug APK instead."
+          echo "It is signed with the auto-generated debug key and installs fine;"
+          echo "add signing secrets to this repo to get release builds."
+        fi
+
     - name: Decode Keystore
+      if: steps.signing.outputs.mode == 'release'
       env:
         KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
       run: |
         echo "$KEYSTORE_BASE64" | base64 --decode > release.keystore
+        # Fail loudly here rather than inside Gradle's signing task.
+        if [ ! -s release.keystore ]; then
+          echo "::error::KEYSTORE_BASE64 did not decode to a non-empty keystore."
+          exit 1
+        fi
 
-    - name: Build Release APK
+    - name: Build Release APK + AAB
+      if: steps.signing.outputs.mode == 'release'
       env:
         KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
         KEY_PASS: ${{ secrets.KEY_PASS }}
         STORE_PASS: ${{ secrets.STORE_PASS }}
       run: |
-        ./gradlew assembleRelease
+        ./gradlew assembleRelease bundleRelease
 
-    - name: Build Release AAB
-      env:
-        KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
-        KEY_PASS: ${{ secrets.KEY_PASS }}
-        STORE_PASS: ${{ secrets.STORE_PASS }}
+    - name: Build Debug APK
+      if: steps.signing.outputs.mode == 'debug'
       run: |
-        ./gradlew bundleRelease
+        ./gradlew assembleDebug
 
     - name: Extract Version Name
       id: extract_version
@@ -98,30 +177,48 @@ jobs:
         echo "Detected Version: $VERSION_NAME"
         echo "VERSION_NAME=$VERSION_NAME" >> $GITHUB_ENV
 
+    # Debug artifacts carry the suffix so a sideloaded build is never mistaken
+    # for a release one — they are signed with different keys and cannot be
+    # installed over each other.
     - name: Rename Artifacts
+      id: artifacts
       run: |
-        cp app/build/outputs/apk/release/app-release.apk android_transcribe_app_v${{ env.VERSION_NAME }}.apk
-        cp app/build/outputs/bundle/release/app-release.aab android_transcribe_app_v${{ env.VERSION_NAME }}.aab
+        if [ "${{ steps.signing.outputs.mode }}" = "release" ]; then
+          cp app/build/outputs/apk/release/app-release.apk \
+             android_transcribe_app_v${VERSION_NAME}.apk
+          cp app/build/outputs/bundle/release/app-release.aab \
+             android_transcribe_app_v${VERSION_NAME}.aab
+          echo "files=android_transcribe_app_v${VERSION_NAME}.apk android_transcribe_app_v${VERSION_NAME}.aab" >> $GITHUB_OUTPUT
+        else
+          cp app/build/outputs/apk/debug/app-debug.apk \
+             android_transcribe_app_v${VERSION_NAME}-debug.apk
+          echo "files=android_transcribe_app_v${VERSION_NAME}-debug.apk" >> $GITHUB_OUTPUT
+        fi
+        ls -lh android_transcribe_app_v${VERSION_NAME}*
 
-    - name: Upload APK Artifact
+    # retention-days caps how long these sit against the repo's Actions storage
+    # allowance. The APK bundles the ~485 MB speech model, so one build per
+    # branch push adds up quickly on a private repo.
+    - name: Upload APK/AAB Artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: app-release-apk-v${{ env.VERSION_NAME }}
-        path: android_transcribe_app_v${{ env.VERSION_NAME }}.apk
+        name: app-${{ steps.signing.outputs.mode }}-v${{ env.VERSION_NAME }}-${{ github.run_number }}
+        path: |
+          android_transcribe_app_v${{ env.VERSION_NAME }}*.apk
+          android_transcribe_app_v${{ env.VERSION_NAME }}*.aab
+        retention-days: 14
+        if-no-files-found: error
 
-    - name: Upload AAB Artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: app-release-aab-v${{ env.VERSION_NAME }}
-        path: android_transcribe_app_v${{ env.VERSION_NAME }}.aab
-
+    # Releases are the phone-friendly path: a direct .apk download with no
+    # GitHub login and no zip to extract on-device. Tag pushes only.
     - name: Create Release
       if: startsWith(github.ref, 'refs/tags/')
       uses: softprops/action-gh-release@v1
       with:
         name: Release v${{ env.VERSION_NAME }}
-        # Use the tagged commit's message as the release notes.
-        body: ${{ github.event.head_commit.message }}
+        body: |
+          Built from ${{ github.sha }}.
+          Signing: ${{ steps.signing.outputs.mode }}
         files: |
-          android_transcribe_app_v${{ env.VERSION_NAME }}.apk
-          android_transcribe_app_v${{ env.VERSION_NAME }}.aab
+          android_transcribe_app_v${{ env.VERSION_NAME }}*.apk
+          android_transcribe_app_v${{ env.VERSION_NAME }}*.aab

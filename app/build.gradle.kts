@@ -23,11 +23,18 @@ android {
     signingConfigs {
         create("release") {
             val ksFile = rootProject.file("release.keystore")
-            if (ksFile.exists()) {
+            // length() > 0, not just exists(): a CI step that base64-decodes an
+            // unset secret leaves a zero-byte file behind, which exists() happily
+            // accepts and which then fails deep inside the signing task with an
+            // opaque error. Treat an empty keystore as no keystore.
+            if (ksFile.exists() && ksFile.length() > 0) {
                 storeFile = ksFile
-                storePassword = System.getenv("STORE_PASS") ?: "password"
-                keyAlias = System.getenv("KEY_ALIAS") ?: "release"
-                keyPassword = System.getenv("KEY_PASS") ?: "password"
+                // takeIf { isNotBlank() } because an undefined GitHub Actions
+                // secret arrives as an empty string, not as an absent variable,
+                // so a plain `?:` fallback never fires.
+                storePassword = System.getenv("STORE_PASS")?.takeIf { it.isNotBlank() } ?: "password"
+                keyAlias = System.getenv("KEY_ALIAS")?.takeIf { it.isNotBlank() } ?: "release"
+                keyPassword = System.getenv("KEY_PASS")?.takeIf { it.isNotBlank() } ?: "password"
             }
         }
     }

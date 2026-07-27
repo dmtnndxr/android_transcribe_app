@@ -11,8 +11,14 @@
 set -uo pipefail
 
 MODE="${1:-all}"
-OUT=/tmp/verify-out
+OUT="${TMPDIR:-/tmp}/verify-out"
 FAILED=0
+
+# Defaulted rather than assumed, so this script also runs directly on a CI
+# runner (where neither is set) and not only inside the container image.
+: "${TESTLIBS:=/opt/testlibs}"
+: "${GRADLE_USER_HOME:=$HOME/.gradle}"
+export TESTLIBS GRADLE_USER_HOME
 
 banner() { printf '\n\033[1m=== %s ===\033[0m\n' "$1"; }
 fail()   { printf '\033[31m✗ %s\033[0m\n' "$1"; FAILED=1; }
