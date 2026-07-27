@@ -41,6 +41,26 @@ RUN_ARGS=(
     -w /work
 )
 
+# Optional live smoke test against the real OpenRouter API.
+#
+# The key comes from $OPENROUTER_API_KEY, or from a key file if that is unset —
+# the file exists because whether a shell sources your profile depends on how it
+# was started, and "the test silently skipped" is a confusing failure mode.
+KEY_FILE="${OPENROUTER_KEY_FILE:-$HOME/.config/ovi/openrouter.key}"
+if [ -z "${OPENROUTER_API_KEY:-}" ] && [ -r "$KEY_FILE" ]; then
+    OPENROUTER_API_KEY="$(tr -d '[:space:]' < "$KEY_FILE")"
+    export OPENROUTER_API_KEY
+fi
+
+# Passed as a bare "-e NAME" so the value is inherited from this shell rather
+# than appearing in the container's command line, where `ps` would show it.
+# Absent means OpenRouterLiveTest reports itself as skipped.
+for var in OPENROUTER_API_KEY OPENROUTER_MODEL; do
+    if [ -n "${!var:-}" ]; then
+        RUN_ARGS+=(-e "$var")
+    fi
+done
+
 if [ "${1:-}" = "shell" ]; then
     exec docker run "${RUN_ARGS[@]}" -it --entrypoint /bin/bash "$IMAGE"
 fi

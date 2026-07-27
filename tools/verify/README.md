@@ -28,6 +28,28 @@ own `com.sun.net.httpserver` and bound to an ephemeral loopback port. No
 network, no subprocess, no emulator — every case including failures is
 deterministic.
 
+## Optional: live OpenRouter test
+
+```sh
+export OPENROUTER_API_KEY=sk-or-v1-...
+export OPENROUTER_MODEL=openai/gpt-4o-mini   # optional
+tools/verify/run.sh tier1
+```
+
+`OpenRouterLiveTest` then runs against the real API: a full round-trip, a
+custom-prompt case, a rejected key, and an unknown model. Skipped entirely when
+the variable is unset, so the default run stays offline, free and
+deterministic.
+
+What it adds over the stub: the stub encodes what the OpenAI-compatible spec
+*says*; this checks what a provider *does* — the real response envelope, real
+auth handling, real error bodies. The rejected-key case in particular is the
+real-provider counterpart to the `setFixedLengthStreamingMode` regression test.
+
+`run.sh` forwards the variable with a bare `-e NAME`, so the value is inherited
+from your shell rather than appearing in the container's command line where
+`ps` would expose it. Costs a fraction of a cent per run.
+
 ## What it deliberately does not cover
 
 - **The Rust core and the JNI boundary.** Post-processing hooks in after Rust

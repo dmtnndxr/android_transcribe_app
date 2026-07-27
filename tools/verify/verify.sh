@@ -22,6 +22,12 @@ pass()   { printf '\033[32m✓ %s\033[0m\n' "$1"; }
 
 tier1() {
   banner "Tier 1 — post-processing logic tests (plain JVM, no Android)"
+
+  if [ -n "${OPENROUTER_API_KEY:-}" ]; then
+    echo "OpenRouter live tests: ENABLED (model: ${OPENROUTER_MODEL:-openai/gpt-4o-mini})"
+  else
+    echo "OpenRouter live tests: skipped (set OPENROUTER_API_KEY to enable)"
+  fi
   rm -rf "$OUT/classes"
   mkdir -p "$OUT/classes"
 

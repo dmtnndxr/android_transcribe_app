@@ -135,14 +135,39 @@ val cargoNdkBuild by tasks.registering(Exec::class) {
     // Copy libc++_shared.so from NDK (needed because Rust links against it dynamically)
     doLast {
         val ndkPath = environment["ANDROID_NDK_HOME"] as String
-        val libcpp = file("$ndkPath/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/aarch64-linux-android/libc++_shared.so")
-        if (libcpp.exists()) {
+        val prebuiltRoot = File("$ndkPath/toolchains/llvm/prebuilt")
+
+        // The NDK names this directory after the *host* it runs on, not the
+        // target: linux-x86_64, darwin-x86_64 (including Apple Silicon), or
+        // windows-x86_64. Hardcoding one of them breaks the build on the other
+        // two hosts. Try the host-derived name first, then fall back to
+        // whatever directory is actually present, so a future host tag
+        // (darwin-aarch64, say) doesn't need another edit here.
+        val osName = System.getProperty("os.name").lowercase()
+        val hostTag = when {
+            osName.startsWith("windows") -> "windows-x86_64"
+            osName.startsWith("mac") || osName.startsWith("darwin") -> "darwin-x86_64"
+            else -> "linux-x86_64"
+        }
+        val candidates = buildList {
+            add(File(prebuiltRoot, hostTag))
+            prebuiltRoot.listFiles()?.filter { it.isDirectory }?.let { addAll(it) }
+        }
+
+        val relative = "sysroot/usr/lib/aarch64-linux-android/libc++_shared.so"
+        val libcpp = candidates.map { File(it, relative) }.firstOrNull { it.exists() }
+
+        if (libcpp != null) {
             val destDir = File(jniLibsDir, "arm64-v8a")
             destDir.mkdirs()
             libcpp.copyTo(File(destDir, "libc++_shared.so"), overwrite = true)
-            println("Copied libc++_shared.so from NDK")
+            println("Copied libc++_shared.so from ${libcpp.parentFile}")
         } else {
-            throw GradleException("libc++_shared.so not found in NDK at: ${libcpp.absolutePath}")
+            throw GradleException(
+                "libc++_shared.so not found under ${prebuiltRoot.absolutePath} " +
+                "(looked for $hostTag first, then any host directory present). " +
+                "Check that ANDROID_NDK_HOME points at a complete NDK."
+            )
         }
     }
 

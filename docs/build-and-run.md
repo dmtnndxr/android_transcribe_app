@@ -3,10 +3,27 @@
 Start-to-finish for getting this build onto a device and exercising the AI
 cleanup feature.
 
-**Do this on your laptop, not the VPS.** The APK needs the Android NDK, the
+**Do this on a laptop, not the VPS.** The APK needs the Android NDK, the
 `aarch64` Rust target, a C++ build of transcribe.cpp and a 485 MB model
 download — and once built, it has to be installed on a phone over USB. The VPS
 can only run the checks in [`tools/verify/`](../tools/verify/README.md).
+
+## Which laptop: use the MacBook
+
+Both work, but macOS is materially less friction for this project:
+
+| | macOS | Windows |
+|---|---|---|
+| `adb` sees a Samsung phone | works out of the box | usually needs Samsung's USB driver installed first |
+| Build scripts | `./gradlew`, Unix shell, same as CI | `gradlew.bat`; `tools/verify/*.sh` needs WSL or Git Bash |
+| Paths in `.properties` files | plain | backslashes are escape characters — a wrong path fails confusingly |
+| Rust + `cargo-ndk` cross-compile | well-trodden | works, but the host toolchain also needs MSVC build tools |
+
+If you only ever build on one machine, make it the Mac. The Windows steps are
+included below because they do work, not because they are equally pleasant.
+
+Apple Silicon is fine — the NDK ships a native arm64 toolchain and the Rust
+`aarch64-linux-android` target cross-compiles from it without special setup.
 
 ---
 
@@ -41,41 +58,88 @@ git checkout feat/ai-cleanup-post-processing
 
 ## 2. Install the toolchain
 
-| Dependency | Install |
-|---|---|
-| JDK 17 | Bundled with Android Studio, or your distro's `jdk17-openjdk` |
-| Android SDK | Android Studio, or `sdkmanager` |
-| Android NDK | `sdkmanager "ndk;28.0.13004108"` |
-| CMake + Ninja | `sdkmanager "cmake;3.22.1"`, or your distro's packages |
-| Rust | [rustup.rs](https://rustup.rs), then `rustup target add aarch64-linux-android` |
-| cargo-ndk | `cargo install cargo-ndk` |
+Same five pieces on every OS; only the install commands differ. The NDK version
+matters — transcribe.cpp is built through CMake against it.
 
-The NDK version matters — transcribe.cpp is built through CMake against it.
+### macOS
+
+```sh
+brew install --cask android-studio      # brings the SDK and a JDK 17 (JBR)
+brew install cmake ninja
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+rustup target add aarch64-linux-android
+cargo install cargo-ndk
+
+# From Android Studio: More Actions -> SDK Manager -> SDK Tools -> NDK,
+# or on the command line:
+sdkmanager "ndk;28.0.13004108" "platforms;android-35" "build-tools;35.0.0"
+```
+
+Default SDK location: `~/Library/Android/sdk`.
+
+### Windows
+
+Install [Android Studio](https://developer.android.com/studio) (SDK + JDK),
+then [rustup](https://rustup.rs) — it will prompt for the MSVC build tools if
+they're missing; accept, the host toolchain needs them. Then in PowerShell:
+
+```powershell
+rustup target add aarch64-linux-android
+cargo install cargo-ndk
+sdkmanager "ndk;28.0.13004108" "platforms;android-35" "build-tools;35.0.0" "cmake;3.22.1"
+```
+
+Default SDK location: `%LOCALAPPDATA%\Android\Sdk`.
+
+You also need **Samsung's USB driver** for `adb` to see the phone —
+[developer.samsung.com/android-usb-driver](https://developer.samsung.com/android-usb-driver).
+Install it before plugging the phone in.
 
 ---
 
 ## 3. Point the build at your setup
 
-Create `local.properties` in the project root (gitignored):
+Two files. Get these right and most build failures never happen.
+
+**`local.properties`** in the project root (gitignored — create it):
 
 ```properties
-sdk.dir=/home/you/Android/Sdk
+# macOS
+sdk.dir=/Users/you/Library/Android/sdk
+
+# Windows — use forward slashes. Backslashes are escape characters in a
+# .properties file, so C:\Users\... silently parses wrong.
+sdk.dir=C:/Users/you/AppData/Local/Android/Sdk
 ```
 
-Then check `gradle.properties`. It currently pins:
+**`gradle.properties`** currently pins a Linux path:
 
 ```properties
 org.gradle.java.home=/opt/android-studio/jbr
 ```
 
-**If that path doesn't exist on your laptop the build fails immediately** with
-`Java home supplied is invalid`. Set it to your JDK 17, or comment it out to
-fall back to `JAVA_HOME`.
+**If that path doesn't exist, the build fails immediately** with `Java home
+supplied is invalid`. Either comment it out to fall back to `JAVA_HOME`, or set
+it for your machine:
 
-If the NDK isn't where Gradle expects, export it:
+```properties
+# macOS (Android Studio's bundled JBR)
+org.gradle.java.home=/Applications/Android Studio.app/Contents/jbr/Contents/Home
+
+# Windows — forward slashes again
+org.gradle.java.home=C:/Program Files/Android/Android Studio/jbr
+```
+
+If Gradle can't find the NDK, point at it explicitly:
 
 ```sh
-export ANDROID_NDK_HOME=$HOME/Android/Sdk/ndk/28.0.13004108
+# macOS
+export ANDROID_NDK_HOME=$HOME/Library/Android/sdk/ndk/28.0.13004108
+```
+
+```powershell
+# Windows
+$env:ANDROID_NDK_HOME="$env:LOCALAPPDATA\Android\Sdk\ndk\28.0.13004108"
 ```
 
 ---
@@ -83,7 +147,11 @@ export ANDROID_NDK_HOME=$HOME/Android/Sdk/ndk/28.0.13004108
 ## 4. Build
 
 ```sh
-./gradlew assembleDebug
+./gradlew assembleDebug          # macOS
+```
+
+```powershell
+.\gradlew.bat assembleDebug      # Windows
 ```
 
 The first build is slow: it downloads the 485 MB GGUF model (SHA-256 verified),
@@ -111,6 +179,10 @@ On One UI:
 
 Some Samsung firmware also has **Install via USB** in Developer options; turn
 it on if `adb install` is refused.
+
+**On Windows,** if `adb devices` shows nothing at all, the Samsung USB driver
+from step 2 is missing or the phone is in *Charging* USB mode. macOS needs no
+driver.
 
 Confirm the phone is visible:
 
@@ -190,10 +262,30 @@ port in its firewall, and use `http://<laptop-LAN-IP>:11434/v1`. The app will
 warn that the address is unencrypted, which is correct — fine on a trusted
 network.
 
-### Option B — a hosted provider
+### Option B — OpenRouter (or any hosted provider)
 
-Pick the preset, paste an API key, set a model. Anything OpenAI-compatible
-works.
+Pick the **OpenRouter** preset, paste your key, set a model:
+
+- **Base URL:** `https://openrouter.ai/api/v1`
+- **API key:** your `sk-or-v1-…` key
+- **Model:** `openai/gpt-4o-mini` is a good default — cheap, fast, and reliable
+  at instruction-following, which is what cleanup needs
+
+Encrypted, works off Wi-Fi, no laptop involved — so this is the better choice
+for everyday use, while Option A is better for iterating without spending
+tokens. Both can be swapped at any time from the settings screen.
+
+The same key can drive the automated live test:
+
+```sh
+export OPENROUTER_API_KEY=sk-or-v1-...
+tools/verify/run.sh tier1
+```
+
+That runs `OpenRouterLiveTest` — a real round-trip, a custom-prompt case, and
+two error cases — against the actual API instead of the local stub. It's
+skipped when the variable is unset, so the default run stays offline and free.
+Set `OPENROUTER_MODEL` to override the model. Costs a fraction of a cent.
 
 ### Then
 
