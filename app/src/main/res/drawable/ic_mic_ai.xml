@@ -1,0 +1,30 @@
+<!-- Mic with a sparkle: the "clean this up with an LLM" variant of ic_mic.
+     The mic is the stock glyph, shrunk and nudged left to clear the sparkle, so
+     the two buttons on the keyboard read as the same action with a modifier. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+
+    <group
+        android:pivotX="12"
+        android:pivotY="21"
+        android:scaleX="0.86"
+        android:scaleY="0.86"
+        android:translateX="-1.2">
+        <path
+            android:fillColor="@android:color/white"
+            android:pathData="M12,14c1.66,0 3,-1.34 3,-3V5c0,-1.66 -1.34,-3 -3,-3S9,3.34 9,5v6c0,1.66 1.34,3 3,3zM17,11c0,2.76 -2.24,5 -5,5s-5,-2.24 -5,-5H5c0,3.53 2.61,6.43 6,6.92V21h2v-3.08c3.39,-0.49 6,-3.39 6,-6.92h-2z" />
+    </group>
+
+    <!-- Four-point sparkle -->
+    <path
+        android:fillColor="@android:color/white"
+        android:pathData="M18.8,1.6L20.05,4.55L23,5.8L20.05,7.05L18.8,10L17.55,7.05L14.6,5.8L17.55,4.55Z" />
+
+    <!-- Trailing glint, smaller and offset for a bit of motion -->
+    <path
+        android:fillColor="@android:color/white"
+        android:pathData="M22,10.4L22.62,11.88L24.1,12.5L22.62,13.12L22,14.6L21.38,13.12L19.9,12.5L21.38,11.88Z" />
+</vector>

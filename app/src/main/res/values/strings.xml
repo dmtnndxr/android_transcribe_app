@@ -109,6 +109,49 @@
     <string name="voice_test_empty">It works, but no speech was detected.</string>
     <string name="voice_test_failed">Couldn\'t start voice input on this device.</string>
 
+    <!-- LLM post-processing: the voice keyboard's second mic sends the
+         transcription to a chat-completions endpoint before inserting it. -->
+    <string name="section_post_process">AI cleanup</string>
+    <string name="desc_post_process">Adds a second microphone to the voice keyboard that runs your transcription through an AI model before inserting it — to fix grammar, reformat, translate, or anything else you write a prompt for. Off by default; the normal microphone always stays fully offline.</string>
+    <string name="btn_post_process">Set up AI cleanup</string>
+
+    <string name="ime_ai_mic_label">Clean up</string>
+    <string name="ime_ai_mic_desc">Record and clean up with AI</string>
+    <string name="ime_ai_listening">Listening (AI cleanup)…</string>
+    <string name="ime_ai_working">Cleaning up…</string>
+    <string name="ime_ai_working_hint">Sending to the AI model</string>
+    <string name="ime_ai_failed">AI cleanup failed (%1$s) — inserted as heard</string>
+    <string name="ime_ai_not_configured">AI cleanup isn\'t set up — inserted as heard</string>
+
+    <string name="pp_title">AI cleanup</string>
+    <string name="pp_enable">Enable AI cleanup</string>
+    <string name="pp_enable_desc">Shows the second microphone on the voice keyboard. The normal microphone is unaffected and never sends anything anywhere.</string>
+    <string name="pp_privacy_warning">Whatever you dictate with the second microphone leaves your device and is sent to the server you configure below. Use a local server if you want to keep everything on your own network.</string>
+
+    <string name="pp_connection_section">Server</string>
+    <string name="pp_connection_desc">Any OpenAI-compatible chat-completions endpoint: Ollama, LM Studio and llama.cpp on your own machine, or a hosted provider. Pick a preset to fill the address in, then adjust it — for a server on your network, replace “localhost” with that machine\'s IP.</string>
+    <string name="pp_preset">Preset</string>
+    <string name="pp_preset_custom">Custom</string>
+    <string name="pp_base_url">Base URL (e.g. http://192.168.1.10:11434/v1)</string>
+    <string name="pp_cleartext_warning">This address is unencrypted (http://). Your dictated text and API key travel in the clear — fine on a trusted local network, risky anywhere else.</string>
+    <string name="pp_api_key">API key</string>
+    <string name="pp_api_key_desc">Leave empty for local servers that don\'t need one. Stored in this app\'s private storage in plain text.</string>
+    <string name="pp_model">Model</string>
+
+    <string name="pp_prompt_section">Prompt</string>
+    <string name="pp_prompt_desc">${output} is replaced with what you dictated. If you leave the placeholder out, your text is sent as an instruction and the transcription follows it as a separate message. Models under ~3B parameters often ignore instructions like these.</string>
+    <string name="pp_prompt">Prompt</string>
+    <string name="pp_reset_prompt">Reset to default</string>
+    <string name="pp_prompt_reset">Prompt reset to the default</string>
+
+    <string name="pp_test_section">Test</string>
+    <string name="pp_test_desc">Sends one short sample sentence through the settings above, so you can check them before relying on this mid-typing.</string>
+    <string name="pp_test">Send test sentence</string>
+    <string name="pp_test_running">Sending…</string>
+    <string name="pp_test_ok">Works.\n\nSent:\n%1$s\n\nGot back:\n%2$s</string>
+    <string name="pp_test_failed">Failed: %1$s</string>
+    <string name="pp_test_incomplete">Fill in the base URL and the model first.</string>
+
     <string name="voice_help_title">Voice input setup</string>
     <string name="voice_help_body">How to use it\n• Open any app and tap the microphone on a supported keyboard/app. A small panel slides up, you speak, tap to stop, and the text is inserted. (Enable “Auto-stop after silence” in the settings to have it stop by itself.)\n\nWhich keyboards open the voice panel\n• Microsoft SwiftKey (not open source) and website voice search open the panel directly.\n• AnySoftKeyboard is the open-source way to get the panel: its mic key opens it as long as no voice keyboard is enabled on your system.\n\nOther open-source keyboards\n• HeliBoard, FlorisBoard, OpenBoard, Fossify Keyboard and Unexpected Keyboard don\'t open the panel: their mic key switches to the “Offline Voice Input” keyboard instead. Enable it once (see “Alternative: Voice keyboard”), speak there, and use its keyboard-switch key to go back. FUTO Keyboard ships its own voice input.\n• Gboard only uses Google\'s own voice typing and can\'t use this app at all.\n\nIf SwiftKey\'s own voice typing opens instead\n• Settings → Rich input → turn off “Multi-modal voice typing”.\n• Then tap the mic again and pick “Offline Voice Input”.\n\nIf Android asks which app to use\n• Choose “Offline Voice Input” and tap “Always”.\n\nIf another app always opens instead\n• Open Settings → Apps → that app → “Open by default” → Clear defaults, then try again.</string>
 </resources>

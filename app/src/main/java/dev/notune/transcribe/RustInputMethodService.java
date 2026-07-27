@@ -48,6 +48,18 @@ public class RustInputMethodService extends InputMethodService {
     private View inputView;
     private MicLevelView micLevelView;
     private View recordCircle;
+    // Secondary "AI cleanup" mic: same capture path, but the transcription is
+    // sent to the configured LLM before it is inserted.
+    private View aiContainer;
+    private android.widget.ImageView aiMicIcon;
+    /**
+     * Whether the recording in flight (or about to start) should be
+     * post-processed. Latched when the mic is tapped so a settings change
+     * mid-recording can't switch modes underneath the user.
+     */
+    private boolean postProcessNext = false;
+    /** True while an LLM request is outstanding, to keep both mics disabled. */
+    private boolean postProcessRunning = false;
     // Night flag the current input view was inflated with, so it can be rebuilt
     // if the theme preference changes while this process stays alive.
     private boolean viewIsNight = false;
@@ -128,6 +140,8 @@ public class RustInputMethodService extends InputMethodService {
             spaceButton = view.findViewById(R.id.ime_space);
             enterButton = view.findViewById(R.id.ime_enter);
             switchKeyboardButton = view.findViewById(R.id.ime_switch_keyboard);
+            aiContainer = view.findViewById(R.id.ime_ai_container);
+            aiMicIcon = view.findViewById(R.id.ime_ai_mic);
 
             switchKeyboardButton.setOnClickListener(v -> {
                 if (isRecording) {
@@ -228,35 +242,14 @@ public class RustInputMethodService extends InputMethodService {
                 }
             });
 
-            recordContainer.setOnClickListener(v -> {
-                if (!recordContainer.isEnabled()) return;
-
-                // Check microphone permission
-                if (checkSelfPermission(android.Manifest.permission.RECORD_AUDIO)
-                        != PackageManager.PERMISSION_GRANTED) {
-                    if (statusView != null) statusView.setText("No mic permission - grant in app");
-                    if (hintView != null) hintView.setText("Open the app to grant permission");
-                    return;
-                }
-
-                if (isRecording) {
-                    stopRecording();
-                    if (pauseAudioActive) {
-                        audioPauser.abandon(this);
-                        pauseAudioActive = false;
-                    }
-                    updateRecordButtonUI(false);
-                } else {
-                    if (isPauseAudioEnabled()) {
-                        audioPauser.request(this);
-                        pauseAudioActive = true;
-                    }
-                    startRecording();
-                    updateRecordButtonUI(true);
-                }
-            });
+            recordContainer.setOnClickListener(v -> onMicTap(false));
+            if (aiMicIcon != null) {
+                aiMicIcon.setOnClickListener(v -> onMicTap(true));
+            }
 
             tintRecordButton(false);
+            tintAiMic(false);
+            updateAiMicVisibility();
             updateUiState();
             return view;
         } catch (Exception e) {
@@ -290,6 +283,9 @@ public class RustInputMethodService extends InputMethodService {
                     audioPauser.request(this);
                     pauseAudioActive = true;
                 }
+                // Auto-start is the plain path: post-processing is opt-in per
+                // recording, via its own button.
+                postProcessNext = false;
                 startRecording();
                 updateRecordButtonUI(true);
             }
@@ -338,6 +334,9 @@ public class RustInputMethodService extends InputMethodService {
                 && ThemePrefs.isNight(ThemePrefs.wrapForNight(this, ThemePrefs.getMode(this))) != viewIsNight) {
             setInputView(onCreateInputView());
         }
+        // Post-processing may have been switched on or off in the app since this
+        // (long-lived) IME process last inflated its view.
+        updateAiMicVisibility();
         // A field is focused and the input connection is live again — commit any
         // text that finished transcribing while nothing was focused.
         flushPendingText();
@@ -349,6 +348,40 @@ public class RustInputMethodService extends InputMethodService {
         inputActive = false;
     }
 
+    /**
+     * Shared handler for both mics. {@code postProcess} selects the AI-cleanup
+     * variant; capture itself is identical either way, so the flag only decides
+     * what happens to the text once transcription finishes.
+     */
+    private void onMicTap(boolean postProcess) {
+        if (isRecording) {
+            // Only the mic that started the recording is left enabled, so this
+            // always stops the session the user actually began.
+            stopRecording();
+            if (pauseAudioActive) {
+                audioPauser.abandon(this);
+                pauseAudioActive = false;
+            }
+            updateRecordButtonUI(false);
+            return;
+        }
+
+        if (checkSelfPermission(android.Manifest.permission.RECORD_AUDIO)
+                != PackageManager.PERMISSION_GRANTED) {
+            if (statusView != null) statusView.setText("No mic permission - grant in app");
+            if (hintView != null) hintView.setText("Open the app to grant permission");
+            return;
+        }
+
+        postProcessNext = postProcess;
+        if (isPauseAudioEnabled()) {
+            audioPauser.request(this);
+            pauseAudioActive = true;
+        }
+        startRecording();
+        updateRecordButtonUI(true);
+    }
+
     private void updateRecordButtonUI(boolean recording) {
         isRecording = recording;
         // Keep the screen awake while recording so it never sleeps mid-capture
@@ -356,14 +389,49 @@ public class RustInputMethodService extends InputMethodService {
         if (inputView != null) {
             inputView.setKeepScreenOn(recording);
         }
-        tintRecordButton(recording);
+        boolean aiActive = recording && postProcessNext;
+        tintRecordButton(recording && !postProcessNext);
+        tintAiMic(aiActive);
         if (recording) {
-            statusView.setText("Listening...");
+            statusView.setText(aiActive ? getString(R.string.ime_ai_listening) : "Listening...");
             hintView.setText("Tap to Stop");
         } else {
             statusView.setText("Processing...");
             hintView.setText("Tap to Record");
             if (micLevelView != null) micLevelView.setLevel(0f);
+        }
+        applyMicEnabledState();
+    }
+
+    /** Shows the AI mic only when post-processing is switched on in the app. */
+    private void updateAiMicVisibility() {
+        if (aiContainer == null) return;
+        aiContainer.setVisibility(
+                PostProcessPrefs.isEnabled(this) ? View.VISIBLE : View.GONE);
+    }
+
+    /**
+     * Single source of truth for which mics are tappable. Both are locked out
+     * while the engine or the LLM is busy, and during a recording only the mic
+     * that started it stays live so the mode can't be switched mid-session.
+     */
+    private void applyMicEnabledState() {
+        boolean busy = postProcessRunning
+                || lastStatus.contains("Transcribing")
+                || lastStatus.contains("Processing")
+                || lastStatus.contains("Waiting")
+                || lastStatus.startsWith("Error");
+
+        boolean mainEnabled = !busy && (!isRecording || !postProcessNext);
+        boolean aiEnabled = !busy && (!isRecording || postProcessNext);
+
+        if (recordContainer != null) {
+            recordContainer.setEnabled(mainEnabled);
+            recordContainer.setAlpha(mainEnabled ? 1.0f : 0.5f);
+        }
+        if (aiContainer != null && aiMicIcon != null) {
+            aiMicIcon.setEnabled(aiEnabled);
+            aiContainer.setAlpha(aiEnabled ? 1.0f : 0.5f);
         }
     }
 
@@ -382,6 +450,24 @@ public class RustInputMethodService extends InputMethodService {
         if (micIcon != null) {
             micIcon.setColorFilter(MaterialColors.getColor(micIcon, iconAttr));
         }
+    }
+
+    /**
+     * Tints the AI mic. Uses the tertiary role so it reads as a sibling of the
+     * main record button rather than a duplicate of it, and fills in solid while
+     * it is the one recording.
+     */
+    private void tintAiMic(boolean recording) {
+        if (aiMicIcon == null) return;
+        int circleAttr = recording
+                ? com.google.android.material.R.attr.colorTertiary
+                : com.google.android.material.R.attr.colorTertiaryContainer;
+        int iconAttr = recording
+                ? com.google.android.material.R.attr.colorOnTertiary
+                : com.google.android.material.R.attr.colorOnTertiaryContainer;
+        aiMicIcon.setBackgroundTintList(ColorStateList.valueOf(
+                MaterialColors.getColor(aiMicIcon, circleAttr)));
+        aiMicIcon.setColorFilter(MaterialColors.getColor(aiMicIcon, iconAttr));
     }
 
     @Override
@@ -425,8 +511,9 @@ public class RustInputMethodService extends InputMethodService {
         boolean isError = lastStatus.startsWith("Error");
         boolean isReady = lastStatus.equals("Ready");
 
-        // Don't show internal loading states to the user
-        if (statusView != null && !isRecording) {
+        // Don't show internal loading states to the user, and don't clobber the
+        // "Cleaning up…" line while an LLM request is still in flight.
+        if (statusView != null && !isRecording && !postProcessRunning) {
             if (isError) {
                 statusView.setText(lastStatus);
             } else if (isTranscribing || isWaiting) {
@@ -441,14 +528,10 @@ public class RustInputMethodService extends InputMethodService {
             progressBar.setVisibility(View.GONE);
         }
 
-        // Disable button only during transcription/processing/waiting or fatal errors
-        if (recordContainer != null) {
-            boolean disable = isTranscribing || isWaiting || isError;
-            recordContainer.setEnabled(!disable);
-            recordContainer.setAlpha(disable ? 0.5f : 1.0f);
-        }
+        // Disable the mics during transcription/processing/waiting or fatal errors
+        applyMicEnabledState();
 
-        if (hintView != null && !isRecording) {
+        if (hintView != null && !isRecording && !postProcessRunning) {
             hintView.setText("Tap to Record");
         }
     }
@@ -456,8 +539,12 @@ public class RustInputMethodService extends InputMethodService {
     // Called from Rust
     public void onTextTranscribed(String text) {
         mainHandler.post(() -> {
+            boolean postProcess = postProcessNext;
+            postProcessNext = false;
+
             if (text == null || text.trim().isEmpty()) {
-                // Nothing recognized — don't insert a stray space.
+                // Nothing recognized — don't insert a stray space, and don't
+                // spend an LLM round-trip on an empty string.
                 updateRecordButtonUI(false);
                 if (statusView != null) statusView.setText("Tap to Record");
                 if (pauseAudioActive) {
@@ -470,28 +557,93 @@ public class RustInputMethodService extends InputMethodService {
                 }
                 return;
             }
-            String committed = text + " ";
-            InputConnection ic = getCurrentInputConnection();
-            if (inputActive && ic != null) {
-                commitTranscribedText(ic, committed);
-            } else {
-                // No editor is focused right now (common on long transcribes where
-                // a web field in Firefox/Gemini dropped focus while we processed
-                // audio). Committing now would be silently dropped, so defer the
-                // text until a field is focused again instead of losing it.
-                pendingCommitText = committed;
+
+            if (postProcess) {
+                if (PostProcessPrefs.isConfigured(this)) {
+                    startPostProcessing(text);
+                } else {
+                    // The AI mic was tapped but there's no endpoint/model set.
+                    // Insert what we heard rather than dropping the user's words.
+                    deliverText(text, getString(R.string.ime_ai_not_configured));
+                }
+                return;
             }
-            if (pauseAudioActive) {
-                audioPauser.abandon(this);
-                pauseAudioActive = false;
+
+            deliverText(text, null);
+        });
+    }
+
+    /**
+     * Sends the transcription to the configured LLM, then inserts the result.
+     * Any failure falls back to the raw transcription with the reason shown in
+     * the status line — post-processing is a bonus, never a gate on getting the
+     * user's words into the field.
+     */
+    private void startPostProcessing(String rawText) {
+        postProcessRunning = true;
+        updateRecordButtonUI(false);
+        // Recording is over, so hand audio focus back now instead of making the
+        // user's music wait out the network round-trip.
+        if (pauseAudioActive) {
+            audioPauser.abandon(this);
+            pauseAudioActive = false;
+        }
+        if (statusView != null) statusView.setText(R.string.ime_ai_working);
+        if (hintView != null) hintView.setText(R.string.ime_ai_working_hint);
+        applyMicEnabledState();
+
+        PostProcessor.processAsync(this, rawText, new PostProcessor.Callback() {
+            @Override
+            public void onSuccess(String processed) {
+                mainHandler.post(() -> {
+                    postProcessRunning = false;
+                    deliverText(processed, null);
+                });
             }
-            updateRecordButtonUI(false);
-            if (statusView != null) statusView.setText("Tap to Record");
-            if (pendingSwitchBack) {
-                pendingSwitchBack = false;
-                switchToPreviousInputMethod();
+
+            @Override
+            public void onFailure(String message) {
+                mainHandler.post(() -> {
+                    postProcessRunning = false;
+                    Log.w(TAG, "Post-processing failed, inserting raw text: " + message);
+                    deliverText(rawText, getString(R.string.ime_ai_failed, message));
+                });
             }
         });
+    }
+
+    /**
+     * Final step for both paths: commit the text (or hold it until a field is
+     * focused again) and reset the keyboard UI.
+     *
+     * @param statusMessage shown instead of the usual idle prompt, for reporting
+     *                      a post-processing failure. Pass null for the default.
+     */
+    private void deliverText(String text, String statusMessage) {
+        String committed = text + " ";
+        InputConnection ic = getCurrentInputConnection();
+        if (inputActive && ic != null) {
+            commitTranscribedText(ic, committed);
+        } else {
+            // No editor is focused right now (common on long transcribes where
+            // a web field in Firefox/Gemini dropped focus while we processed
+            // audio, and more likely still once an LLM round-trip is added).
+            // Committing now would be silently dropped, so defer the text until
+            // a field is focused again instead of losing it.
+            pendingCommitText = committed;
+        }
+        if (pauseAudioActive) {
+            audioPauser.abandon(this);
+            pauseAudioActive = false;
+        }
+        updateRecordButtonUI(false);
+        if (statusView != null) {
+            statusView.setText(statusMessage != null ? statusMessage : "Tap to Record");
+        }
+        if (pendingSwitchBack) {
+            pendingSwitchBack = false;
+            switchToPreviousInputMethod();
+        }
     }
 
     // Commits transcribed text into the active input connection, optionally

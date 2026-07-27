@@ -12,11 +12,12 @@ height="80">](https://play.google.com/store/apps/details?id=dev.notune.transcrib
 ## Features
 
 - **Voice input in any app:** Tap the microphone on the keyboard you already use (SwiftKey, etc.) or a website's voice search, and your speech is transcribed straight into the text field. The app registers as your device's speech-to-text provider.
-- **100% offline & private:** The Parakeet TDT model runs entirely on-device — no audio ever leaves your phone, and no network is required.
+- **100% offline & private:** The Parakeet TDT model runs entirely on-device — no audio ever leaves your phone, and no network is required. (The one exception is *AI cleanup*, below: it is off by default, and even then only the finished text is sent, never audio.)
 - **Live Subtitles:** Real-time captions for any audio/video playing on your device.
 - **Optional voice keyboard:** A built-in keyboard you can switch to for voice input wherever you prefer it.
 - **Supported Languages:** Bulgarian, Croatian, Czech, Danish, Dutch, English, Estonian, Finnish, French, German, Greek, Hungarian, Italian, Latvian, Lithuanian, Maltese, Polish, Portuguese, Romanian, Slovak, Slovenian, Spanish, Swedish, Russian, Ukrainian.
 - **Custom models:** Import any [transcribe.cpp](https://github.com/handy-computer/transcribe.cpp) GGUF model (Whisper, Nemotron streaming, Canary, more Parakeet variants, …) from a downloaded file — the app stays fully offline; downloads happen in your browser.
+- **Optional AI cleanup:** A second microphone on the voice keyboard runs your transcription through an LLM before inserting it — fixing grammar, reformatting, translating, or whatever your prompt asks for. Works with any OpenAI-compatible endpoint, including a local Ollama or LM Studio. Off by default.
 - **Efficient native backend:** All models run through [transcribe.cpp](https://github.com/handy-computer/transcribe.cpp) (ggml), wrapped in a safe Rust core.
 
 ## Screenshots
@@ -55,6 +56,38 @@ Tap **Try voice input** on the home screen to test the whole flow in one tap.
 ### Dedicated voice keyboard (optional)
 
 Prefer voice input as its own keyboard? Enable the **Offline Voice Input** keyboard via *Open Keyboard Settings* on the home screen, switch to it from your keyboard switcher, then tap **Tap to Record**. By default the recording keeps running even if you switch apps or the keyboard closes (turn off *Record in background* in settings if you don't want that) — the text is inserted when you come back.
+
+### AI cleanup (optional)
+
+The voice keyboard can show a **second, smaller microphone** that transcribes exactly like the main one, then sends the text to an LLM before inserting it. Use it to fix grammar and punctuation, reformat into bullet points, translate, or anything else you write a prompt for. The main microphone is untouched and stays fully offline.
+
+Set it up in the app under **AI cleanup**:
+
+1. Turn on **Enable AI cleanup** — this is what makes the second mic appear on the keyboard.
+2. Pick a **preset** to fill in the address, then adjust it. Any OpenAI-compatible `/chat/completions` endpoint works:
+
+   | Server | Base URL |
+   |---|---|
+   | Ollama | `http://<host>:11434/v1` |
+   | LM Studio | `http://<host>:1234/v1` |
+   | llama.cpp server | `http://<host>:8080/v1` |
+   | OpenAI | `https://api.openai.com/v1` |
+   | Groq | `https://api.groq.com/openai/v1` |
+   | OpenRouter | `https://openrouter.ai/api/v1` |
+   | Anthropic | `https://api.anthropic.com/v1` |
+
+   For a server on your own machine, replace `localhost` with that machine's LAN IP — `localhost` on a phone means the phone. Ollama also needs `OLLAMA_HOST=0.0.0.0` to accept connections from other devices.
+3. Enter the **API key** (leave empty for local servers) and the **model** name.
+4. Edit the **prompt** if you want. `${output}` is replaced with what you dictated; leave the placeholder out and your prompt is sent as an instruction with the transcription as a separate message.
+5. Hit **Send test sentence** to confirm it all works before relying on it mid-typing.
+
+Notes:
+
+- **Failures never lose your words.** If the server is unreachable, the key is rejected, or the request times out, the raw transcription is inserted anyway and the keyboard's status line says what went wrong.
+- **Small models disappoint.** Anything under ~3B parameters tends to ignore the instruction and paraphrase or answer your text instead of cleaning it up.
+- **Privacy.** Text dictated with the second mic leaves the device. Audio never does. Point it at a local server to keep everything on your own network.
+- **Plain HTTP.** LAN servers are reached over `http://`, so the transcription and API key travel unencrypted; the settings screen warns when the address is non-loopback `http://`. Fine on a trusted network, not over the open internet.
+- The API key is stored in the app's private storage in plain text, the same protection the other settings get. It is not hardware-backed.
 
 ### Live subtitles
 
@@ -106,6 +139,21 @@ org.gradle.java.home=/path/to/jdk17
 ```
 
 ## Building
+
+### Verification without a full toolchain
+
+Type-checking the app and running the post-processing tests doesn't need the
+NDK, the Rust toolchain or the speech model. `tools/verify/` does both in a
+container, so a machine with only Docker can check a change:
+
+```sh
+tools/verify/run.sh          # logic tests + resource validation + javac
+tools/verify/run.sh clean    # remove the image and cache volume afterwards
+```
+
+See [tools/verify/README.md](tools/verify/README.md) for what each tier covers
+and what it deliberately doesn't. Building an actual APK still needs the full
+setup below.
 
 ### Debug APK
 ```bash
@@ -164,6 +212,7 @@ The built-in Parakeet TDT GGUF model (~485 MB) is automatically downloaded from 
     - GGUF conversion by [handy-computer](https://huggingface.co/handy-computer/parakeet-tdt-0.6b-v3-gguf).
     - Licensed under [CC-BY 4.0](https://creativecommons.org/licenses/by/4.0/).
 - **Inference Backend:** [transcribe.cpp](https://github.com/handy-computer/transcribe.cpp) by CJ Pais / Handy Computer.
+- **AI cleanup** is modeled on [Handy](https://github.com/cjpais/handy)'s [post-processing](https://handy.computer/docs/post-processing) — same idea of a separate trigger for the processed variant, and the same `${output}` prompt placeholder.
 
 ## License
 

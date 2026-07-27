@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Permits cleartext (http://) traffic.
+
+  This exists for exactly one reason: the AI-cleanup feature lets the user point
+  at an OpenAI-compatible server they run themselves — Ollama, LM Studio or
+  llama.cpp on a desktop on the same network — and those serve plain HTTP with no
+  practical way to obtain a certificate for a LAN IP. Since Android 9 cleartext
+  is blocked by default, and a per-domain allowlist can't be written in advance
+  for an address the user types in at runtime.
+
+  The exposure is narrow: the app makes no network requests of its own. The only
+  outbound traffic is the request to the endpoint the user configured, and the
+  settings screen warns when that endpoint is non-loopback http://. Transcription
+  itself remains entirely on-device.
+
+  trust-anchors is deliberately not overridden, so the platform default (system
+  CAs) applies to https:// endpoints.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true" />
+</network-security-config>

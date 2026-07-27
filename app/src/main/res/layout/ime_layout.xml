@@ -62,6 +62,42 @@
             android:layout_gravity="center"
             android:contentDescription="@string/section_ime"/>
 
+        <!-- Secondary mic: records exactly like the main button, then sends the
+             transcription through the configured LLM before inserting it.
+             Hidden entirely until post-processing is set up in the app. -->
+        <LinearLayout
+            android:id="@+id/ime_ai_container"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:gravity="center_horizontal"
+            android:layout_gravity="center_vertical|end"
+            android:layout_marginEnd="20dp"
+            android:visibility="gone">
+
+            <ImageView
+                android:id="@+id/ime_ai_mic"
+                android:layout_width="56dp"
+                android:layout_height="56dp"
+                android:padding="14dp"
+                android:src="@drawable/ic_mic_ai"
+                android:scaleType="fitCenter"
+                android:background="@drawable/bg_ime_mini_mic"
+                android:foreground="?attr/selectableItemBackgroundBorderless"
+                android:clickable="true"
+                android:focusable="true"
+                android:contentDescription="@string/ime_ai_mic_desc"/>
+
+            <TextView
+                android:id="@+id/ime_ai_label"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/ime_ai_mic_label"
+                android:layout_marginTop="6dp"
+                android:textColor="?attr/colorOnSurfaceVariant"
+                android:textAppearance="?attr/textAppearanceLabelSmall"/>
+        </LinearLayout>
+
         <TextView
             android:id="@+id/ime_hint"
             android:layout_width="wrap_content"
