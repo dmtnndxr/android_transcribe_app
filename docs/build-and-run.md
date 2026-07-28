@@ -21,10 +21,10 @@ install version **30.0.15729638**.
 
 ---
 
-## 2. Two files to fix (do this first, or the build fails)
+## 2. Local configuration
 
-**`gradle.properties`** — the line `org.gradle.java.home=/opt/android-studio/jbr`
-is a Linux path. Replace it with:
+If your terminal does not already use JDK 17+, configure the Android Studio JDK
+in the user-level **`~/.gradle/gradle.properties`** file:
 
 ```properties
 org.gradle.java.home=/Applications/Android Studio.app/Contents/jbr/Contents/Home

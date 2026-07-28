@@ -129,13 +129,12 @@ Create a `local.properties` file in the project root (this file is gitignored):
 sdk.dir=/path/to/your/Android/Sdk
 ```
 
-If your default Java is not JDK 17, uncomment and set `org.gradle.java.home` in `gradle.properties`:
+If your default Java is not JDK 17+, set `org.gradle.java.home` in your
+user-level `~/.gradle/gradle.properties` (not in the repository):
 
 ```properties
 org.gradle.java.home=/path/to/jdk17
-# Examples:
-#   /opt/android-studio/jbr          (Android Studio bundled JBR)
-#   /usr/lib/jvm/java-17-openjdk     (System JDK 17)
+# Example: /Applications/Android Studio.app/Contents/jbr/Contents/Home
 ```
 
 ## Building
