@@ -1,5 +1,8 @@
 # Offline Voice Input (Android)
 
+> [!IMPORTANT]
+> **About this fork:** This fork extends the original project with configurable post-processing of transcribed text, allowing recognition results to be refined or transformed before they are inserted into the target app.
+
 An offline, privacy-focused speech-to-text tool for Android, built with Rust. Tap the microphone on the keyboard you already use — your speech is transcribed entirely on-device and typed into any app. Also includes live subtitles and an optional dedicated voice keyboard.
 
 [<img src="https://i.ibb.co/q0mdc4Z/get-it-on-github.png"
