@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Offline Voice Input</string>
+    <string name="ime_service_label">Offline Voice Input</string>
     <string name="welcome_title">Voice Input &amp; Subtitles</string>
     <string name="welcome_subtitle">Fully offline, private, and fast.</string>
     
@@ -111,20 +112,21 @@
 
     <!-- LLM post-processing: the voice keyboard's second mic sends the
          transcription to a chat-completions endpoint before inserting it. -->
-    <string name="section_post_process">AI cleanup</string>
+    <string name="section_post_process">AI post-processing</string>
     <string name="desc_post_process">Adds a second microphone to the voice keyboard that runs your transcription through an AI model before inserting it — to fix grammar, reformat, translate, or anything else you write a prompt for. Off by default; the normal microphone always stays fully offline.</string>
-    <string name="btn_post_process">Set up AI cleanup</string>
+    <string name="btn_post_process">Set up AI post-processing</string>
 
-    <string name="ime_ai_mic_label">Clean up</string>
-    <string name="ime_ai_mic_desc">Record and clean up with AI</string>
-    <string name="ime_ai_listening">Listening (AI cleanup)…</string>
-    <string name="ime_ai_working">Cleaning up…</string>
+    <string name="ime_stop_label">Stop</string>
+    <string name="ime_ai_mic_label">Dictate + AI</string>
+    <string name="ime_ai_mic_desc">Start dictation with AI post-processing</string>
+    <string name="ime_ai_listening">Listening (AI)…</string>
+    <string name="ime_ai_working">Processing with AI…</string>
     <string name="ime_ai_working_hint">Sending to the AI model</string>
-    <string name="ime_ai_failed">AI cleanup failed (%1$s) — inserted as heard</string>
-    <string name="ime_ai_not_configured">AI cleanup isn\'t set up — inserted as heard</string>
+    <string name="ime_ai_failed">AI post-processing failed (%1$s) — inserted as heard</string>
+    <string name="ime_ai_not_configured">AI post-processing isn\'t set up — inserted as heard</string>
 
-    <string name="pp_title">AI cleanup</string>
-    <string name="pp_enable">Enable AI cleanup</string>
+    <string name="pp_title">AI post-processing</string>
+    <string name="pp_enable">Enable AI post-processing</string>
     <string name="pp_enable_desc">Shows the second microphone on the voice keyboard. The normal microphone is unaffected and never sends anything anywhere.</string>
     <string name="pp_privacy_warning">Whatever you dictate with the second microphone leaves your device and is sent to the server you configure below. Use a local server if you want to keep everything on your own network.</string>
 

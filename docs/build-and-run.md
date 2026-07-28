@@ -17,7 +17,7 @@ cargo install cargo-ndk
 
 Open Android Studio once, let it finish first-run setup, then:
 **More Actions → SDK Manager → SDK Tools →** tick **NDK (Side by side)** and
-install version **28.0.13004108**.
+install version **30.0.15729638**.
 
 ---
 
@@ -45,7 +45,7 @@ Open the project in Android Studio and press **Run** (▶).
 Or from a terminal:
 
 ```sh
-./gradlew installDebug
+./gradlew installPlusDebug
 ```
 
 First build takes 20–30 minutes: it downloads a 485 MB speech model and

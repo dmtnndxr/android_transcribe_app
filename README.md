@@ -117,7 +117,7 @@ The built-in Parakeet model works out of the box. Under **Manage speech models**
 |---|---|
 | **JDK 17** | Android Studio (bundled) or `sudo pacman -S jdk17-openjdk` |
 | **Android SDK** | Via Android Studio or `sdkmanager` |
-| **Android NDK** | `sdkmanager "ndk;28.0.13004108"` |
+| **Android NDK** | `sdkmanager "ndk;30.0.15729638"` |
 | **Rust** | [rustup.rs](https://rustup.rs) + `rustup target add aarch64-linux-android` |
 | **cargo-ndk** | `cargo install cargo-ndk` |
 
@@ -155,22 +155,22 @@ See [tools/verify/README.md](tools/verify/README.md) for what each tier covers
 and what it deliberately doesn't. Building an actual APK still needs the full
 setup below.
 
-### Debug APK
+### Plus debug APK (installs alongside the original)
 ```bash
-./gradlew assembleDebug
-# Output: app/build/outputs/apk/debug/app-debug.apk
+./gradlew assemblePlusDebug
+# Output: app/build/outputs/apk/plus/debug/app-plus-debug.apk
 ```
 
-### Release APK
+### Standard release APK
 ```bash
-./gradlew assembleRelease
-# Output: app/build/outputs/apk/release/app-release.apk
+./gradlew assembleStandardRelease
+# Output: app/build/outputs/apk/standard/release/app-standard-release.apk
 ```
 
 ### Release AAB (Google Play)
 ```bash
-./gradlew bundleRelease
-# Output: app/build/outputs/bundle/release/app-release.aab
+./gradlew bundleStandardRelease
+# Output: app/build/outputs/bundle/standardRelease/app-standard-release.aab
 ```
 
 ### Signing

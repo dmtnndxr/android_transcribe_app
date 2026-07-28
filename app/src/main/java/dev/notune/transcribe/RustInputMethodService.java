@@ -52,6 +52,7 @@ public class RustInputMethodService extends InputMethodService {
     // sent to the configured LLM before it is inserted.
     private View aiContainer;
     private android.widget.ImageView aiMicIcon;
+    private TextView aiLabel;
     /**
      * Whether the recording in flight (or about to start) should be
      * post-processed. Latched when the mic is tapped so a settings change
@@ -142,6 +143,7 @@ public class RustInputMethodService extends InputMethodService {
             switchKeyboardButton = view.findViewById(R.id.ime_switch_keyboard);
             aiContainer = view.findViewById(R.id.ime_ai_container);
             aiMicIcon = view.findViewById(R.id.ime_ai_mic);
+            aiLabel = view.findViewById(R.id.ime_ai_label);
 
             switchKeyboardButton.setOnClickListener(v -> {
                 if (isRecording) {
@@ -395,9 +397,13 @@ public class RustInputMethodService extends InputMethodService {
         if (recording) {
             statusView.setText(aiActive ? getString(R.string.ime_ai_listening) : "Listening...");
             hintView.setText("Tap to Stop");
+            if (aiLabel != null) {
+                aiLabel.setText(aiActive ? R.string.ime_stop_label : R.string.ime_ai_mic_label);
+            }
         } else {
             statusView.setText("Processing...");
             hintView.setText("Tap to Record");
+            if (aiLabel != null) aiLabel.setText(R.string.ime_ai_mic_label);
             if (micLevelView != null) micLevelView.setLevel(0f);
         }
         applyMicEnabledState();
@@ -512,7 +518,7 @@ public class RustInputMethodService extends InputMethodService {
         boolean isReady = lastStatus.equals("Ready");
 
         // Don't show internal loading states to the user, and don't clobber the
-        // "Cleaning up…" line while an LLM request is still in flight.
+        // Keep the AI-processing line while an LLM request is still in flight.
         if (statusView != null && !isRecording && !postProcessRunning) {
             if (isError) {
                 statusView.setText(lastStatus);

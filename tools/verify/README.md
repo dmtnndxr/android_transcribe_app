@@ -19,7 +19,7 @@ Later runs are incremental.
 
 | | Tier 1 | Tier 2 |
 |---|---|---|
-| Runs | `PostProcessClientTest` on a plain JVM | `:app:compileDebugJavaWithJavac` |
+| Runs | `PostProcessClientTest` on a plain JVM | `:app:compilePlusDebugJavaWithJavac` |
 | Checks | request building, prompt templating, response parsing, `<think>` stripping, quote unwrapping, HTTP status → message mapping, timeouts, oversized responses | AAPT2 resource validation, R.java generation, javac against `android.jar` and the resolved Material/AppCompat AARs |
 | Needs | JDK only | Android SDK, no NDK |
 
@@ -58,7 +58,7 @@ from your shell rather than appearing in the container's command line where
 - **APK assembly.** Needs the NDK, the aarch64 Rust target, a C++ build of
   transcribe.cpp and a 600 MB model — several GB for an artifact that still
   can't be exercised without a phone. Build that on a developer machine:
-  `./gradlew assembleDebug`.
+  `./gradlew assemblePlusDebug`.
 - **On-device behaviour.** Keyboard layout, tinting, and the commit path need a
   real IME session.
 

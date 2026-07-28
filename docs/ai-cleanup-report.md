@@ -153,7 +153,7 @@ server built on the JDK's own `com.sun.net.httpserver`, bound to an ephemeral
 loopback port — no network, no subprocess, no emulator, every case
 deterministic.
 
-**Tier 2 — `:app:compileDebugJavaWithJavac`.** AAPT2 over every resource,
+**Tier 2 — `:app:compilePlusDebugJavaWithJavac`.** AAPT2 over every resource,
 R.java generation, and javac against `android.jar` plus the resolved
 Material/AppCompat AARs.
 

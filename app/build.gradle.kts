@@ -8,6 +8,7 @@ plugins {
 android {
     namespace = "dev.notune.transcribe"
     compileSdk = 35
+    ndkVersion = "30.0.15729638"
 
     defaultConfig {
         applicationId = "dev.notune.transcribe"
@@ -37,12 +38,42 @@ android {
                 keyPassword = System.getenv("KEY_PASS")?.takeIf { it.isNotBlank() } ?: "password"
             }
         }
+
+        // Stable self-signed key for the independently installable Plus build.
+        // No Google Play account is involved. Local builds read the key and its
+        // password from ignored files; CI materializes the same files from
+        // repository secrets so every APK can update the previous Plus APK.
+        create("plus") {
+            val ksFile = rootProject.file("plus.keystore")
+            val passwordFile = rootProject.file("plus-signing.pass")
+            if (ksFile.isFile && ksFile.length() > 0
+                    && passwordFile.isFile && passwordFile.length() > 0) {
+                val password = passwordFile.readText().trim()
+                storeFile = ksFile
+                storePassword = password
+                keyAlias = "offline-voice-input-plus"
+                keyPassword = password
+            }
+        }
+    }
+
+    flavorDimensions += "edition"
+    productFlavors {
+        create("standard") {
+            dimension = "edition"
+            signingConfig = signingConfigs.getByName("release")
+        }
+        create("plus") {
+            dimension = "edition"
+            applicationIdSuffix = ".plus"
+            versionNameSuffix = "-plus"
+            signingConfig = signingConfigs.getByName("plus")
+        }
     }
 
     buildTypes {
         release {
             isMinifyEnabled = false
-            signingConfig = signingConfigs.getByName("release")
         }
     }
 
@@ -131,9 +162,14 @@ val cargoNdkBuild by tasks.registering(Exec::class) {
     environment("TRANSCRIBE_CMAKE_ARGS", "-DGGML_CPU_ARM_ARCH=armv8.2-a+dotprod+fp16")
 
     val jniLibsDir = project.file("src/main/jniLibs")
+    val cargoExecutable = System.getenv("CARGO")
+        ?: File(System.getProperty("user.home"), ".cargo/bin/cargo")
+            .takeIf { it.isFile }
+            ?.absolutePath
+        ?: "cargo"
 
     commandLine(
-        "cargo", "ndk",
+        cargoExecutable, "ndk",
         "-t", "arm64-v8a",
         "-o", jniLibsDir.absolutePath,
         "build", "--release"

@@ -21,6 +21,8 @@ local.properties
 
 # Keystore (sensitive)
 release.keystore
+plus.keystore
+plus-signing.pass
 
 # Rust build output
 /target/

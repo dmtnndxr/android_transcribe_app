@@ -85,8 +85,8 @@ jobs:
 
     - name: Install Android NDK
       run: |
-        sdkmanager --install "ndk;28.0.13004108"
-        echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/28.0.13004108" >> $GITHUB_ENV
+        sdkmanager --install "ndk;30.0.15729638"
+        echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/30.0.15729638" >> $GITHUB_ENV
 
     - name: Setup Rust
       uses: dtolnay/rust-toolchain@stable
@@ -122,8 +122,8 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-gradle-
 
-    # Forks don't inherit the upstream repo's secrets, so KEYSTORE_BASE64 is
-    # empty there. Decide up front which kind of build is even possible, rather
+    # Forks don't inherit this repo's Plus signing secret. Decide up front which
+    # kind of build is possible, rather
     # than discovering it at the packaging step after 30 minutes of compiling.
     #
     # Note this must test for a *non-empty* secret: `echo "" | base64 --decode`
@@ -132,43 +132,42 @@ jobs:
     - name: Determine signing mode
       id: signing
       env:
-        KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+        PLUS_KEYSTORE_BASE64: ${{ secrets.PLUS_KEYSTORE_BASE64 }}
+        PLUS_KEYSTORE_PASSWORD: ${{ secrets.PLUS_KEYSTORE_PASSWORD }}
       run: |
-        if [ -n "$KEYSTORE_BASE64" ]; then
+        if [ -n "$PLUS_KEYSTORE_BASE64" ] && [ -n "$PLUS_KEYSTORE_PASSWORD" ]; then
           echo "mode=release" >> $GITHUB_OUTPUT
-          echo "Signing secrets present — building a signed release."
+          echo "Plus signing secrets present — building an updateable Plus APK."
         else
           echo "mode=debug" >> $GITHUB_OUTPUT
-          echo "No KEYSTORE_BASE64 secret — building a debug APK instead."
+          echo "No Plus signing secrets — building a side-by-side debug APK instead."
           echo "It is signed with the auto-generated debug key and installs fine;"
-          echo "add signing secrets to this repo to get release builds."
+          echo "only APKs signed by the stable Plus key can update one another."
         fi
 
-    - name: Decode Keystore
+    - name: Materialize Plus signing files
       if: steps.signing.outputs.mode == 'release'
       env:
-        KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+        PLUS_KEYSTORE_BASE64: ${{ secrets.PLUS_KEYSTORE_BASE64 }}
+        PLUS_KEYSTORE_PASSWORD: ${{ secrets.PLUS_KEYSTORE_PASSWORD }}
       run: |
-        echo "$KEYSTORE_BASE64" | base64 --decode > release.keystore
-        # Fail loudly here rather than inside Gradle's signing task.
-        if [ ! -s release.keystore ]; then
-          echo "::error::KEYSTORE_BASE64 did not decode to a non-empty keystore."
+        printf '%s' "$PLUS_KEYSTORE_BASE64" | base64 --decode > plus.keystore
+        printf '%s' "$PLUS_KEYSTORE_PASSWORD" > plus-signing.pass
+        chmod 600 plus.keystore plus-signing.pass
+        if [ ! -s plus.keystore ] || [ ! -s plus-signing.pass ]; then
+          echo "::error::Plus signing files are empty."
           exit 1
         fi
 
-    - name: Build Release APK + AAB
+    - name: Build signed Plus APK
       if: steps.signing.outputs.mode == 'release'
-      env:
-        KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
-        KEY_PASS: ${{ secrets.KEY_PASS }}
-        STORE_PASS: ${{ secrets.STORE_PASS }}
       run: |
-        ./gradlew assembleRelease bundleRelease
+        ./gradlew assemblePlusRelease
 
-    - name: Build Debug APK
+    - name: Build side-by-side Plus debug APK
       if: steps.signing.outputs.mode == 'debug'
       run: |
-        ./gradlew assembleDebug
+        ./gradlew assemblePlusDebug
 
     - name: Extract Version Name
       id: extract_version
@@ -177,35 +176,32 @@ jobs:
         echo "Detected Version: $VERSION_NAME"
         echo "VERSION_NAME=$VERSION_NAME" >> $GITHUB_ENV
 
-    # Debug artifacts carry the suffix so a sideloaded build is never mistaken
-    # for a release one — they are signed with different keys and cannot be
-    # installed over each other.
+    # Both variants have the Plus application ID and can live next to the
+    # original app. The debug suffix warns that only the stable release-signed
+    # artifacts can update one another.
     - name: Rename Artifacts
       id: artifacts
       run: |
         if [ "${{ steps.signing.outputs.mode }}" = "release" ]; then
-          cp app/build/outputs/apk/release/app-release.apk \
-             android_transcribe_app_v${VERSION_NAME}.apk
-          cp app/build/outputs/bundle/release/app-release.aab \
-             android_transcribe_app_v${VERSION_NAME}.aab
-          echo "files=android_transcribe_app_v${VERSION_NAME}.apk android_transcribe_app_v${VERSION_NAME}.aab" >> $GITHUB_OUTPUT
+          cp app/build/outputs/apk/plus/release/app-plus-release.apk \
+             offline-voice-input-plus-v${VERSION_NAME}.apk
+          echo "files=offline-voice-input-plus-v${VERSION_NAME}.apk" >> $GITHUB_OUTPUT
         else
-          cp app/build/outputs/apk/debug/app-debug.apk \
-             android_transcribe_app_v${VERSION_NAME}-debug.apk
-          echo "files=android_transcribe_app_v${VERSION_NAME}-debug.apk" >> $GITHUB_OUTPUT
+          cp app/build/outputs/apk/plus/debug/app-plus-debug.apk \
+             offline-voice-input-plus-v${VERSION_NAME}-debug.apk
+          echo "files=offline-voice-input-plus-v${VERSION_NAME}-debug.apk" >> $GITHUB_OUTPUT
         fi
-        ls -lh android_transcribe_app_v${VERSION_NAME}*
+        ls -lh offline-voice-input-plus-v${VERSION_NAME}*
 
     # retention-days caps how long these sit against the repo's Actions storage
     # allowance. The APK bundles the ~485 MB speech model, so one build per
     # branch push adds up quickly on a private repo.
-    - name: Upload APK/AAB Artifacts
+    - name: Upload Plus APK artifact
       uses: actions/upload-artifact@v4
       with:
-        name: app-${{ steps.signing.outputs.mode }}-v${{ env.VERSION_NAME }}-${{ github.run_number }}
+        name: offline-voice-input-plus-${{ steps.signing.outputs.mode }}-v${{ env.VERSION_NAME }}-${{ github.run_number }}
         path: |
-          android_transcribe_app_v${{ env.VERSION_NAME }}*.apk
-          android_transcribe_app_v${{ env.VERSION_NAME }}*.aab
+          offline-voice-input-plus-v${{ env.VERSION_NAME }}*.apk
         retention-days: 14
         if-no-files-found: error
 
@@ -218,7 +214,7 @@ jobs:
         name: Release v${{ env.VERSION_NAME }}
         body: |
           Built from ${{ github.sha }}.
+          Edition: Offline Voice Input+
           Signing: ${{ steps.signing.outputs.mode }}
         files: |
-          android_transcribe_app_v${{ env.VERSION_NAME }}*.apk
-          android_transcribe_app_v${{ env.VERSION_NAME }}*.aab
+          offline-voice-input-plus-v${{ env.VERSION_NAME }}*.apk

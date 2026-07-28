@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Offline Voice Input+</string>
+    <string name="ime_service_label">Offline Voice Input+</string>
+    <string name="recognition_service_label">Offline Voice Input+</string>
+</resources>

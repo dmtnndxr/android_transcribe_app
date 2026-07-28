@@ -81,7 +81,7 @@ PROPS
   # in this image. Everything else — AAPT2, R.java generation, javac against
   # android.jar and the resolved AARs — runs for real.
   if ./gradlew --no-daemon --console=plain \
-      :app:compileDebugJavaWithJavac \
+      :app:compilePlusDebugJavaWithJavac \
       -x :app:cargoNdkBuild \
       -x :app:downloadModels; then
     pass "resources + javac"
