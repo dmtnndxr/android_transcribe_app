@@ -1,16 +1,24 @@
-# Offline Voice Input (Android)
+# Offline Voice Input+ (Android)
 
 > [!IMPORTANT]
-> **About this fork:** This fork extends the original project with configurable post-processing of transcribed text, allowing recognition results to be refined or transformed before they are inserted into the target app.
+> **Unofficial fork:** Offline Voice Input+ is an independent fork of
+> [Offline Voice Input](https://github.com/notune/android_transcribe_app). It adds
+> configurable AI post-processing of transcribed text and is not affiliated with
+> or endorsed by the upstream project.
 
 An offline, privacy-focused speech-to-text tool for Android, built with Rust. Tap the microphone on the keyboard you already use — your speech is transcribed entirely on-device and typed into any app. Also includes live subtitles and an optional dedicated voice keyboard.
 
 [<img src="https://i.ibb.co/q0mdc4Z/get-it-on-github.png"
-alt="Get it on GitHub"
-height="80">](https://github.com/notune/android_transcribe_app/releases/latest)
-[<img src="https://play.google.com/intl/en_us/badges/images/generic/en-play-badge.png"
-alt="Get it on Google Play"
-height="80">](https://play.google.com/store/apps/details?id=dev.notune.transcribe)
+alt="Download Offline Voice Input+ from GitHub"
+height="80">](https://github.com/dmtnndxr/android_transcribe_app/releases/latest)
+
+Download the signed **Offline Voice Input+** APK from this fork's
+[latest release](https://github.com/dmtnndxr/android_transcribe_app/releases/latest).
+It uses its own application ID and can be installed alongside the original app.
+
+Looking for the original project? Visit the
+[upstream repository](https://github.com/notune/android_transcribe_app) or install
+the [original Offline Voice Input from Google Play](https://play.google.com/store/apps/details?id=dev.notune.transcribe).
 
 ## Features
 

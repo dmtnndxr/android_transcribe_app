@@ -30,4 +30,7 @@ We believe in transparency and the power of the community. Offline Voice Input i
 • A native Android interface with a Rust core for speed and safety
 
 Source code, issues and contributions:
+https://github.com/dmtnndxr/android_transcribe_app
+
+Offline Voice Input+ is an independent fork of the original Offline Voice Input project:
 https://github.com/notune/android_transcribe_app
