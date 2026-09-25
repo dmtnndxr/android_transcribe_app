@@ -1,4 +1,5 @@
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -30,6 +31,13 @@ struct Endpointing {
     speech_started: AtomicBool,
 }
 
+/// A streaming transcription running alongside the recording (streaming
+/// models only). Audio reaches it through `VoiceSessionState::stream_tx`.
+struct StreamWorker {
+    result: Receiver<Result<Option<String>, String>>,
+    cancelled: Arc<AtomicBool>,
+}
+
 pub struct VoiceSessionState {
     pub stream: Option<SendStream>,
     pub audio_buffer: Arc<Mutex<Vec<f32>>>,
@@ -39,6 +47,11 @@ pub struct VoiceSessionState {
     /// True while the current recording runs; flipped off on stop/cancel so
     /// the auto-stop monitor (if any) exits.
     pub session_active: Arc<AtomicBool>,
+    /// Feeds mic audio to the streaming worker; `None` when not streaming.
+    /// Taking the sender out closes the channel, which tells the worker the
+    /// recording ended.
+    stream_tx: Arc<Mutex<Option<Sender<Vec<f32>>>>>,
+    stream_worker: Option<StreamWorker>,
 }
 
 fn notify_status(env: &mut JNIEnv, obj: &JObject, msg: &str) {
@@ -83,6 +96,8 @@ pub fn init_session(env: JNIEnv, target: JObject) -> VoiceSessionState {
         target_ref: target_ref.clone(),
         last_level_sent: Arc::new(Mutex::new(std::time::Instant::now())),
         session_active: Arc::new(AtomicBool::new(false)),
+        stream_tx: Arc::new(Mutex::new(None)),
+        stream_worker: None,
     };
 
     // Load engine in background
@@ -138,15 +153,22 @@ pub fn start_recording(mut env: JNIEnv, state: &mut VoiceSessionState, auto_stop
         None
     };
 
+    abandon_stream(state);
+    start_stream(state);
+
     let jvm = state.jvm.clone();
     let target_ref = state.target_ref.clone();
     let last_sent = state.last_level_sent.clone();
     let endpoint_cb = endpoint.clone();
+    let stream_tx = state.stream_tx.clone();
 
     let stream = device.build_input_stream(
         &config,
         move |data: &[f32], _: &_| {
             buffer_clone.lock().unwrap().extend_from_slice(data);
+            if let Some(tx) = stream_tx.lock().unwrap().as_ref() {
+                let _ = tx.send(data.to_vec());
+            }
 
             // compute RMS
             let mut sum = 0.0f32;
@@ -225,6 +247,7 @@ pub fn start_recording(mut env: JNIEnv, state: &mut VoiceSessionState, auto_stop
             }
         }
         Err(e) => {
+            abandon_stream(state);
             notify_status(
                 &mut env,
                 state.target_ref.as_obj(),
@@ -232,6 +255,43 @@ pub fn start_recording(mut env: JNIEnv, state: &mut VoiceSessionState, auto_stop
             );
         }
     }
+}
+
+/// Starts a streaming worker if the loaded model supports streaming. Uses
+/// `try_lock` so a start never blocks the caller's (UI) thread: an engine
+/// still busy with the previous dictation just means this one runs offline.
+fn start_stream(state: &mut VoiceSessionState) {
+    let Some(eng) = engine::get_engine() else { return };
+    let streaming = match eng.try_lock() {
+        Ok(e) => e.supports_streaming(),
+        Err(_) => false,
+    };
+    if !streaming {
+        return;
+    }
+    let (tx, rx) = mpsc::channel::<Vec<f32>>();
+    let (result_tx, result_rx) = mpsc::channel();
+    let cancelled = Arc::new(AtomicBool::new(false));
+    let worker_cancelled = cancelled.clone();
+    std::thread::spawn(move || {
+        let result = engine::transcribe_streaming(&eng, rx, &|| {
+            worker_cancelled.load(Ordering::SeqCst)
+        });
+        let _ = result_tx.send(result);
+    });
+    *state.stream_tx.lock().unwrap() = Some(tx);
+    state.stream_worker = Some(StreamWorker {
+        result: result_rx,
+        cancelled,
+    });
+}
+
+/// Ends the streaming worker without a result.
+fn abandon_stream(state: &mut VoiceSessionState) {
+    if let Some(worker) = state.stream_worker.take() {
+        worker.cancelled.store(true, Ordering::SeqCst);
+    }
+    state.stream_tx.lock().unwrap().take();
 }
 
 pub fn stop_recording(mut env: JNIEnv, state: &mut VoiceSessionState) {
@@ -243,6 +303,7 @@ pub fn stop_recording(mut env: JNIEnv, state: &mut VoiceSessionState) {
 
     // Guard against empty buffer (mic permission denied, instant stop, etc.)
     if buffer.is_empty() {
+        abandon_stream(state);
         notify_status(
             &mut env,
             state.target_ref.as_obj(),
@@ -250,6 +311,10 @@ pub fn stop_recording(mut env: JNIEnv, state: &mut VoiceSessionState) {
         );
         return;
     }
+
+    // Closing the channel tells the streaming worker the recording ended.
+    state.stream_tx.lock().unwrap().take();
+    let worker = state.stream_worker.take();
 
     let jvm = state.jvm.clone();
     let target_ref = state.target_ref.clone();
@@ -262,6 +327,19 @@ pub fn stop_recording(mut env: JNIEnv, state: &mut VoiceSessionState) {
             Err(_) => return,
         };
         let obj = target_ref.as_obj();
+
+        if let Some(worker) = worker {
+            match worker.result.recv() {
+                Ok(Ok(Some(text))) => {
+                    notify_status(&mut env, obj, "Ready");
+                    notify_text(&mut env, obj, &text);
+                    return;
+                }
+                // Fall back to transcribing the recorded buffer offline.
+                Ok(Err(e)) => log::warn!("streaming failed ({}); transcribing offline", e),
+                _ => log::warn!("streaming ended without a result; transcribing offline"),
+            }
+        }
 
         // Wait for engine if somehow still loading
         if engine::get_engine().is_none() {
@@ -289,6 +367,7 @@ pub fn stop_recording(mut env: JNIEnv, state: &mut VoiceSessionState) {
 pub fn cancel_recording(mut env: JNIEnv, state: &mut VoiceSessionState) {
     state.session_active.store(false, Ordering::SeqCst);
     state.stream = None;
+    abandon_stream(state);
     state.audio_buffer.lock().unwrap().clear();
     notify_status(&mut env, state.target_ref.as_obj(), "Canceled");
 }

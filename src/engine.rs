@@ -9,7 +9,9 @@
 
 use once_cell::sync::Lazy;
 use std::path::Path;
+use std::sync::mpsc::Receiver;
 use std::sync::{Arc, Condvar, Mutex};
+use std::time::{Duration, Instant};
 
 use jni::objects::{GlobalRef, JObject};
 use jni::JNIEnv;
@@ -50,6 +52,9 @@ pub struct Engine {
     /// Status reported once loading succeeded; carries a warning when the
     /// translate setting can't do what the user expects with this model.
     ready_status: &'static str,
+    /// The model can transcribe incrementally while audio arrives (e.g.
+    /// Nemotron Streaming). Offline models (Parakeet TDT, Whisper) can't.
+    supports_streaming: bool,
 }
 
 impl Engine {
@@ -116,6 +121,8 @@ impl Engine {
             n_threads: threads,
             ..Default::default()
         };
+        let supports_streaming = model.capabilities().supports_streaming;
+        log::info!("engine: streaming supported: {}", supports_streaming);
         let session = model.session_with(&options).map_err(|e| e.to_string())?;
         Ok(Engine {
             session,
@@ -123,6 +130,7 @@ impl Engine {
             task,
             run_ext,
             ready_status,
+            supports_streaming,
         })
     }
 
@@ -156,6 +164,64 @@ impl Engine {
             rest = &rest[take..];
         }
         Ok(text)
+    }
+
+    pub fn supports_streaming(&self) -> bool {
+        self.supports_streaming
+    }
+
+    /// Streams audio chunks from `audio` into the model as they arrive and
+    /// returns the final text once the sender side is dropped. Returns
+    /// `Ok(None)` when `cancelled` is set by then (nothing is finalized).
+    /// The model does its work during recording, so only the last fraction of
+    /// a second is left for `finalize` — the wait after "stop" no longer grows
+    /// with the length of the dictation.
+    fn stream(
+        &mut self,
+        audio: Receiver<Vec<f32>>,
+        cancelled: &dyn Fn() -> bool,
+    ) -> Result<Option<String>, String> {
+        let opts = transcribe_cpp::RunOptions {
+            language: self.language.clone(),
+            task: self.task,
+            ..Default::default()
+        };
+        let mut stream = self
+            .session
+            .stream(&opts, &transcribe_cpp::StreamOptions::default())
+            .map_err(|e| e.to_string())?;
+
+        let mut received = 0usize;
+        let mut compute = Duration::ZERO;
+        let mut pending: Vec<f32> = Vec::new();
+        while let Ok(first) = audio.recv() {
+            // Coalesce whatever queued up while the previous feed ran: the
+            // mic delivers ~10-20 ms buffers, and one feed per buffer would
+            // spend more time in call overhead than in the model.
+            pending.extend_from_slice(&first);
+            while let Ok(more) = audio.try_recv() {
+                pending.extend_from_slice(&more);
+            }
+            received += pending.len();
+            let t = Instant::now();
+            stream.feed(&pending).map_err(|e| e.to_string())?;
+            compute += t.elapsed();
+            pending.clear();
+        }
+        if cancelled() {
+            return Ok(None);
+        }
+
+        let t = Instant::now();
+        stream.finalize().map_err(|e| e.to_string())?;
+        let text = stream.text().full;
+        log::info!(
+            "streamed {:.1}s audio: {:.2}s model time during recording, {:.2}s after stop",
+            received as f64 / 16_000.0,
+            compute.as_secs_f64(),
+            t.elapsed().as_secs_f64()
+        );
+        Ok(Some(text))
     }
 
     /// One model run. A rejected language hint is degraded instead of
@@ -236,6 +302,24 @@ pub fn transcribe_shared(engine: &Arc<Mutex<Engine>>, samples: Vec<f32>) -> Resu
         started.elapsed().as_secs_f64()
     );
     result
+}
+
+/// Runs a streaming transcription on the shared engine (see
+/// [`Engine::stream`]), with the same panic and lock-poison hardening as
+/// [`transcribe_shared`]. The engine lock is held for the whole recording.
+pub fn transcribe_streaming(
+    engine: &Arc<Mutex<Engine>>,
+    audio: Receiver<Vec<f32>>,
+    cancelled: &dyn Fn() -> bool,
+) -> Result<Option<String>, String> {
+    std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let mut guard = engine.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        guard.stream(audio, cancelled)
+    }))
+    .unwrap_or_else(|_| {
+        log::error!("streaming transcription panicked; reporting as error");
+        Err("transcription failed unexpectedly, please try again".to_string())
+    })
 }
 
 pub fn is_engine_loaded() -> bool {
