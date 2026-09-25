@@ -14,8 +14,8 @@ android {
         applicationId = "dev.notune.transcribe"
         minSdk = 26
         targetSdk = 35
-        versionCode = 19
-        versionName = "0.1.18"
+        versionCode = 20
+        versionName = "0.1.19"
         ndk {
             abiFilters += "arm64-v8a"
         }
@@ -153,6 +153,13 @@ val cargoNdkBuild by tasks.registering(Exec::class) {
     // platform detection needs one of these (ANDROID_NDK_HOME is not enough).
     environment("ANDROID_NDK_ROOT", ndkDir)
     environment("ANDROID_NDK", ndkDir)
+    // Host compiler flags (for example Homebrew/Xcode include and library
+    // paths from a shell profile) are invalid for Android cross-compilation
+    // and can make CMake's compiler check fail. Keep the native build fully
+    // described by the NDK toolchain instead.
+    environment.remove("CFLAGS")
+    environment.remove("CPPFLAGS")
+    environment.remove("LDFLAGS")
     // ggml cannot autodetect the CPU when cross-compiling and falls back to
     // baseline armv8-a, losing the dotprod/fp16 kernels its quantized matmuls
     // rely on (several times slower). armv8.2-a+dotprod+fp16 is supported by
