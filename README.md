@@ -14,7 +14,7 @@ height="80">](https://github.com/dmtnndxr/android_transcribe_app/releases/latest
 
 Download the signed **Offline Voice Input+** APK from this fork's
 [latest release](https://github.com/dmtnndxr/android_transcribe_app/releases/latest).
-It uses its own application ID and can be installed alongside the original app.
+It uses its own application ID (`io.github.dmtnndxr.transcribe`) and can be installed alongside the original app.
 
 Looking for the original project? Visit the
 [upstream repository](https://github.com/notune/android_transcribe_app) or install
@@ -107,13 +107,13 @@ Tap **Start Live Subtitles** and choose *Share entire screen* to get real-time, 
 **Advanced: skip the screen-capture dialog.** Android shows a "Start recording or casting?" consent dialog every time subtitles start. You can pre-approve it once via adb — after that, subtitles start instantly and the setting survives reboots (USB debugging can be turned off again afterwards):
 
 ```bash
-adb shell appops set --user 0 dev.notune.transcribe PROJECT_MEDIA allow
+adb shell appops set --user 0 io.github.dmtnndxr.transcribe PROJECT_MEDIA allow
 ```
 
 To undo it:
 
 ```bash
-adb shell appops set --user 0 dev.notune.transcribe PROJECT_MEDIA default
+adb shell appops set --user 0 io.github.dmtnndxr.transcribe PROJECT_MEDIA default
 ```
 
 This relies on the undocumented `PROJECT_MEDIA` app-op; on some OEM builds it may not work or may get reset by the system — the normal dialog remains the fallback. The same instructions are shown in-app under *Skip the permission dialog (advanced)*.

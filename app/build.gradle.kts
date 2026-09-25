@@ -65,7 +65,10 @@ android {
         }
         create("plus") {
             dimension = "edition"
-            applicationIdSuffix = ".plus"
+            // Fork-owned ID rather than a suffix on upstream's dev.notune namespace.
+            // The Java package/namespace stays dev.notune.transcribe to keep
+            // upstream merges and the JNI symbol names untouched.
+            applicationId = "io.github.dmtnndxr.transcribe"
             versionNameSuffix = "-plus"
             signingConfig = signingConfigs.getByName("plus")
         }
