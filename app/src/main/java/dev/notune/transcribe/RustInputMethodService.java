@@ -353,12 +353,13 @@ public class RustInputMethodService extends InputMethodService {
     /**
      * Shared handler for both mics. {@code postProcess} selects the AI-cleanup
      * variant; capture itself is identical either way, so the flag only decides
-     * what happens to the text once transcription finishes.
+     * what happens to the text once transcription finishes. Either mic stops a
+     * running recording, and the one used to stop decides: a plain dictation
+     * stopped with the AI mic still gets cleaned up, and vice versa.
      */
     private void onMicTap(boolean postProcess) {
         if (isRecording) {
-            // Only the mic that started the recording is left enabled, so this
-            // always stops the session the user actually began.
+            postProcessNext = postProcess;
             stopRecording();
             if (pauseAudioActive) {
                 audioPauser.abandon(this);
@@ -418,8 +419,8 @@ public class RustInputMethodService extends InputMethodService {
 
     /**
      * Single source of truth for which mics are tappable. Both are locked out
-     * while the engine or the LLM is busy, and during a recording only the mic
-     * that started it stays live so the mode can't be switched mid-session.
+     * while the engine or the LLM is busy; during a recording both stay live,
+     * since either one can stop it (see {@link #onMicTap}).
      */
     private void applyMicEnabledState() {
         boolean busy = postProcessRunning
@@ -428,8 +429,8 @@ public class RustInputMethodService extends InputMethodService {
                 || lastStatus.contains("Waiting")
                 || lastStatus.startsWith("Error");
 
-        boolean mainEnabled = !busy && (!isRecording || !postProcessNext);
-        boolean aiEnabled = !busy && (!isRecording || postProcessNext);
+        boolean mainEnabled = !busy;
+        boolean aiEnabled = !busy;
 
         if (recordContainer != null) {
             recordContainer.setEnabled(mainEnabled);
