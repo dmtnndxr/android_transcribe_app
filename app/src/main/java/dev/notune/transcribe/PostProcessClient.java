@@ -14,6 +14,7 @@ import java.net.SocketTimeoutException;
 import java.net.URL;
 import java.net.UnknownHostException;
 import java.nio.charset.StandardCharsets;
+import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -75,6 +76,15 @@ public final class PostProcessClient {
         public PostProcessException(String message, Throwable cause) { super(message, cause); }
     }
 
+    /**
+     * The provider refused a request that asked it to skip reasoning (some
+     * OpenRouter endpoints, e.g. GLM Flash, make it mandatory). Never reaches
+     * the user: {@link #process} retries once without the parameter.
+     */
+    private static final class ReasoningRequiredException extends PostProcessException {
+        ReasoningRequiredException() { super("reasoning is mandatory for this model"); }
+    }
+
     private PostProcessClient() {}
 
     /**
@@ -112,8 +122,39 @@ public final class PostProcessClient {
             throw new PostProcessException("invalid server URL");
         }
 
-        byte[] body = buildBody(model, promptTemplate, transcript);
+        return process(url, apiKey, model, promptTemplate, transcript,
+                connectTimeoutMs, readTimeoutMs, isOpenRouter(url));
+    }
 
+    /**
+     * Sends the request, first asking the provider to skip reasoning when
+     * {@code skipReasoning} is set. Reasoning models otherwise think before
+     * every rewrite — measured on OpenRouter, qwen3.7-flash took ~10 s per
+     * dictated sentence instead of ~1 s. Models that refuse to skip it get
+     * the request again without the parameter.
+     */
+    static String process(URL url, String apiKey, String model,
+                          String promptTemplate, String transcript,
+                          int connectTimeoutMs, int readTimeoutMs,
+                          boolean skipReasoning)
+            throws PostProcessException {
+        if (skipReasoning) {
+            try {
+                return send(url, apiKey,
+                        buildBody(model, promptTemplate, transcript, true),
+                        connectTimeoutMs, readTimeoutMs, true);
+            } catch (ReasoningRequiredException e) {
+                // Fall through to a plain request.
+            }
+        }
+        return send(url, apiKey, buildBody(model, promptTemplate, transcript, false),
+                connectTimeoutMs, readTimeoutMs, false);
+    }
+
+    private static String send(URL url, String apiKey, byte[] body,
+                               int connectTimeoutMs, int readTimeoutMs,
+                               boolean reasoningSkipped)
+            throws PostProcessException {
         HttpURLConnection conn = null;
         try {
             conn = (HttpURLConnection) url.openConnection();
@@ -143,8 +184,12 @@ public final class PostProcessClient {
 
             int status = conn.getResponseCode();
             if (status < 200 || status > 299) {
-                throw new PostProcessException(describeHttpError(status,
-                        readAll(conn.getErrorStream())));
+                String error = readAll(conn.getErrorStream());
+                if (reasoningSkipped && status == 400
+                        && error.toLowerCase(Locale.ROOT).contains("reasoning")) {
+                    throw new ReasoningRequiredException();
+                }
+                throw new PostProcessException(describeHttpError(status, error));
             }
 
             String text = extractContent(readAll(conn.getInputStream()));
@@ -181,6 +226,20 @@ public final class PostProcessClient {
     }
 
     /**
+     * OpenRouter is the only provider we send its {@code reasoning} parameter
+     * to: other OpenAI-compatible servers (Ollama, LM Studio, llama.cpp) may
+     * reject a field they don't know.
+     */
+    static boolean isOpenRouter(URL url) {
+        String host = url.getHost().toLowerCase(Locale.ROOT);
+        return host.equals("openrouter.ai") || host.endsWith(".openrouter.ai");
+    }
+
+    static byte[] buildBody(String model, String promptTemplate, String transcript) {
+        return buildBody(model, promptTemplate, transcript, false);
+    }
+
+    /**
      * Builds the request. If the prompt template contains {@code ${output}} the
      * transcription is substituted into it and sent as a single user message —
      * that is the Handy convention and gives the user full control over framing.
@@ -188,7 +247,8 @@ public final class PostProcessClient {
      * the transcription is sent as a separate user message, so a prompt like
      * "translate to German" also works as written.
      */
-    static byte[] buildBody(String model, String promptTemplate, String transcript) {
+    static byte[] buildBody(String model, String promptTemplate, String transcript,
+                            boolean skipReasoning) {
         String template = (promptTemplate == null || promptTemplate.trim().isEmpty())
                 ? DEFAULT_PROMPT
                 : promptTemplate;
@@ -215,6 +275,10 @@ public final class PostProcessClient {
             // and a useful ceiling everywhere else: a rewrite of dictated text
             // is never long, so this only ever truncates a runaway response.
             root.put("max_tokens", MAX_OUTPUT_TOKENS);
+            if (skipReasoning) {
+                // OpenRouter's unified reasoning parameter.
+                root.put("reasoning", new JSONObject().put("effort", "none"));
+            }
             return root.toString().getBytes(StandardCharsets.UTF_8);
         } catch (JSONException e) {
             // JSONObject.put only throws on NaN/Infinity values, none of which

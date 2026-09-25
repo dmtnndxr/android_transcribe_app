@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
+import java.net.URL;
 import java.nio.charset.StandardCharsets;
 
 import static org.junit.jupiter.api.Assertions.assertAll;
@@ -151,6 +152,39 @@ class PostProcessClientTest {
                     PostProcessClient.buildBody("  m  ", "p ${output}", TRANSCRIPT),
                     StandardCharsets.UTF_8));
             assertEquals("m", root.getString("model"));
+        }
+
+        @Test
+        @DisplayName("asks OpenRouter to skip reasoning only when told to")
+        void reasoningParameter() {
+            JSONObject plain = body("p ${output}", TRANSCRIPT);
+            JSONObject skipping = new JSONObject(new String(
+                    PostProcessClient.buildBody(MODEL, "p ${output}", TRANSCRIPT, true),
+                    StandardCharsets.UTF_8));
+            assertAll(
+                    () -> assertFalse(plain.has("reasoning"),
+                            "local servers may reject an unknown field"),
+                    () -> assertEquals("none",
+                            skipping.getJSONObject("reasoning").getString("effort")));
+        }
+    }
+
+    @Nested
+    @DisplayName("isOpenRouter")
+    class IsOpenRouter {
+
+        @Test
+        @DisplayName("matches openrouter.ai and its subdomains only")
+        void hosts() throws Exception {
+            assertAll(
+                    () -> assertTrue(PostProcessClient.isOpenRouter(
+                            new URL("https://openrouter.ai/api/v1/chat/completions"))),
+                    () -> assertTrue(PostProcessClient.isOpenRouter(
+                            new URL("https://eu.OpenRouter.ai/api/v1/chat/completions"))),
+                    () -> assertFalse(PostProcessClient.isOpenRouter(
+                            new URL("http://192.168.1.10:11434/v1/chat/completions"))),
+                    () -> assertFalse(PostProcessClient.isOpenRouter(
+                            new URL("https://notopenrouter.ai/v1/chat/completions"))));
         }
     }
 
@@ -426,6 +460,44 @@ class PostProcessClientTest {
             assertNotNull(e.getMessage());
             assertFalse(e.getMessage().contains("Exception"),
                     "user-facing message should not contain a class name: " + e.getMessage());
+        }
+
+        @Test
+        @DisplayName("retries without the reasoning parameter when a model requires reasoning")
+        void reasoningMandatoryFallback() throws Exception {
+            int[] calls = {0};
+            try (StubServer server = new StubServer((exchange, captured) -> {
+                calls[0]++;
+                if (new JSONObject(captured.body).has("reasoning")) {
+                    StubServer.replyRaw(exchange, 400, "{\"error\":{\"message\":"
+                            + "\"Reasoning is mandatory for this endpoint and cannot be disabled.\"}}");
+                } else {
+                    StubServer.replyContent(exchange, "ok");
+                }
+            })) {
+                String out = PostProcessClient.process(
+                        new URL(PostProcessClient.endpointFor(server.baseUrl())), "k",
+                        MODEL, "p ${output}", "t", 1_000, 1_000, true);
+                assertAll(
+                        () -> assertEquals("ok", out),
+                        () -> assertEquals(2, calls[0]));
+            }
+        }
+
+        @Test
+        @DisplayName("does not retry an unrelated 400")
+        void unrelatedBadRequestIsNotRetried() throws Exception {
+            int[] calls = {0};
+            try (StubServer server = new StubServer((exchange, captured) -> {
+                calls[0]++;
+                StubServer.replyRaw(exchange, 400, "{\"error\":{\"message\":\"bad model\"}}");
+            })) {
+                assertThrows(PostProcessClient.PostProcessException.class,
+                        () -> PostProcessClient.process(
+                                new URL(PostProcessClient.endpointFor(server.baseUrl())), "k",
+                                MODEL, "p ${output}", "t", 1_000, 1_000, true));
+                assertEquals(1, calls[0]);
+            }
         }
 
         @Test
