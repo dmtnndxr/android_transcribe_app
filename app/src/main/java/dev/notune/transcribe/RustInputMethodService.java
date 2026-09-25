@@ -542,6 +542,24 @@ public class RustInputMethodService extends InputMethodService {
         }
     }
 
+    // Called from Rust while a streaming model transcribes during recording.
+    public void onPartialText(String text) {
+        mainHandler.post(() -> {
+            if (!isRecording || statusView == null || text == null) return;
+            String live = liveTail(text);
+            if (!live.isEmpty()) statusView.setText(live);
+        });
+    }
+
+    /**
+     * The end of the running transcript, which is the part being spoken right
+     * now; a long dictation would otherwise push it out of the status line.
+     */
+    static String liveTail(String text) {
+        String t = text.trim();
+        return t.length() <= 80 ? t : "…" + t.substring(t.length() - 80);
+    }
+
     // Called from Rust
     public void onTextTranscribed(String text) {
         mainHandler.post(() -> {

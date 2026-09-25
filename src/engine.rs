@@ -171,7 +171,8 @@ impl Engine {
     }
 
     /// Streams audio chunks from `audio` into the model as they arrive and
-    /// returns the final text once the sender side is dropped. Returns
+    /// returns the final text once the sender side is dropped. `on_text`
+    /// receives the running hypothesis whenever it changes. Returns
     /// `Ok(None)` when `cancelled` is set by then (nothing is finalized).
     /// The model does its work during recording, so only the last fraction of
     /// a second is left for `finalize` — the wait after "stop" no longer grows
@@ -180,6 +181,7 @@ impl Engine {
         &mut self,
         audio: Receiver<Vec<f32>>,
         cancelled: &dyn Fn() -> bool,
+        on_text: &dyn Fn(&str),
     ) -> Result<Option<String>, String> {
         let opts = transcribe_cpp::RunOptions {
             language: self.language.clone(),
@@ -204,9 +206,12 @@ impl Engine {
             }
             received += pending.len();
             let t = Instant::now();
-            stream.feed(&pending).map_err(|e| e.to_string())?;
+            let update = stream.feed(&pending).map_err(|e| e.to_string())?;
             compute += t.elapsed();
             pending.clear();
+            if update.committed_changed || update.tentative_changed {
+                on_text(&stream.text().display());
+            }
         }
         if cancelled() {
             return Ok(None);
@@ -311,10 +316,11 @@ pub fn transcribe_streaming(
     engine: &Arc<Mutex<Engine>>,
     audio: Receiver<Vec<f32>>,
     cancelled: &dyn Fn() -> bool,
+    on_text: &dyn Fn(&str),
 ) -> Result<Option<String>, String> {
     std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         let mut guard = engine.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
-        guard.stream(audio, cancelled)
+        guard.stream(audio, cancelled, on_text)
     }))
     .unwrap_or_else(|_| {
         log::error!("streaming transcription panicked; reporting as error");

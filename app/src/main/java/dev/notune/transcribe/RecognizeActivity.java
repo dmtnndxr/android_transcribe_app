@@ -148,6 +148,15 @@ public class RecognizeActivity extends AppCompatActivity {
         runOnUiThread(() -> micLevel.setLevel(level));
     }
 
+    // Called from Rust while a streaming model transcribes during recording.
+    public void onPartialText(String text) {
+        runOnUiThread(() -> {
+            if (!isRecording || text == null) return;
+            String live = RustInputMethodService.liveTail(text);
+            if (!live.isEmpty()) status.setText(live);
+        });
+    }
+
     // Called from Rust – keep same method name as IME for code reuse
     public void onTextTranscribed(String text) {
         runOnUiThread(() -> {

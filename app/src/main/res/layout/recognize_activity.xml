@@ -61,6 +61,8 @@
             android:layout_marginStart="12dp"
             android:layout_marginEnd="8dp"
             android:text="Listening… (tap to stop)"
+            android:maxLines="3"
+            android:ellipsize="end"
             android:textColor="?attr/colorOnSurface"
             android:textAppearance="?attr/textAppearanceTitleSmall" />
 

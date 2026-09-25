@@ -21,6 +21,8 @@
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:text="Tap to speak"
+            android:maxLines="2"
+            android:ellipsize="end"
             android:textColor="?attr/colorOnSurfaceVariant"
             android:textAppearance="?attr/textAppearanceBodyMedium"
             android:paddingStart="4dp"/>

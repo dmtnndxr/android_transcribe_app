@@ -69,6 +69,19 @@ fn notify_level(env: &mut JNIEnv, obj: &JObject, level: f32) {
     let _ = env.call_method(obj, "onAudioLevel", "(F)V", &[level.into()]);
 }
 
+/// Live hypothesis while a streaming model transcribes during recording.
+fn notify_partial(env: &mut JNIEnv, obj: &JObject, text: &str) {
+    if let Ok(jtxt) = env.new_string(text) {
+        if env
+            .call_method(obj, "onPartialText", "(Ljava/lang/String;)V", &[(&jtxt).into()])
+            .is_err()
+        {
+            // Don't leave a pending Java exception on this thread.
+            let _ = env.exception_clear();
+        }
+    }
+}
+
 fn notify_text(env: &mut JNIEnv, obj: &JObject, text: &str) {
     if let Ok(jtxt) = env.new_string(text) {
         let _ = env.call_method(
@@ -273,10 +286,20 @@ fn start_stream(state: &mut VoiceSessionState) {
     let (result_tx, result_rx) = mpsc::channel();
     let cancelled = Arc::new(AtomicBool::new(false));
     let worker_cancelled = cancelled.clone();
+    let jvm = state.jvm.clone();
+    let target_ref = state.target_ref.clone();
     std::thread::spawn(move || {
-        let result = engine::transcribe_streaming(&eng, rx, &|| {
-            worker_cancelled.load(Ordering::SeqCst)
-        });
+        let env = std::cell::RefCell::new(jvm.attach_current_thread().ok());
+        let result = engine::transcribe_streaming(
+            &eng,
+            rx,
+            &|| worker_cancelled.load(Ordering::SeqCst),
+            &|text| {
+                if let Some(env) = env.borrow_mut().as_mut() {
+                    notify_partial(env, target_ref.as_obj(), text);
+                }
+            },
+        );
         let _ = result_tx.send(result);
     });
     *state.stream_tx.lock().unwrap() = Some(tx);
