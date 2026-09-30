@@ -1,0 +1,2 @@
+- fix the keyboard switching back unexpectedly after a canceled recording or a voice edit
+- never replace selected text with a cut-off AI reply; long selections get a larger reply budget

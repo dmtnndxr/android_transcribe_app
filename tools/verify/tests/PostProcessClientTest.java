@@ -176,8 +176,20 @@ class PostProcessClientTest {
                     () -> assertTrue(messages.getJSONObject(1).getString("content")
                             .contains(selected)),
                     () -> assertEquals(0, root.getInt("temperature")),
-                    () -> assertEquals(PostProcessClient.MAX_OUTPUT_TOKENS,
+                    () -> assertEquals(PostProcessClient.editOutputTokens(selected),
                             root.getInt("max_tokens")));
+        }
+
+        @Test
+        @DisplayName("selection edit budget grows with the selection, within bounds")
+        void selectionEditBudget() {
+            assertAll(
+                    () -> assertEquals(PostProcessClient.MAX_OUTPUT_TOKENS,
+                            PostProcessClient.editOutputTokens("short")),
+                    () -> assertEquals(6000,
+                            PostProcessClient.editOutputTokens("x".repeat(3000))),
+                    () -> assertEquals(PostProcessClient.MAX_EDIT_OUTPUT_TOKENS,
+                            PostProcessClient.editOutputTokens("x".repeat(100_000))));
         }
 
         @Test
@@ -297,6 +309,17 @@ class PostProcessClientTest {
                     PostProcessClient.PostProcessException.class,
                     () -> PostProcessClient.extractContent(json));
             assertEquals("model not loaded", e.getMessage());
+        }
+
+        @Test
+        @DisplayName("rejects a reply cut off by max_tokens instead of returning part of it")
+        void rejectsTruncatedReply() {
+            String json = "{\"choices\":[{\"message\":{\"content\":\"Half of the"
+                    + "\"},\"finish_reason\":\"length\"}]}";
+            PostProcessClient.PostProcessException e = assertThrows(
+                    PostProcessClient.PostProcessException.class,
+                    () -> PostProcessClient.extractContent(json));
+            assertTrue(e.getMessage().contains("cut off"), e.getMessage());
         }
 
         @Test

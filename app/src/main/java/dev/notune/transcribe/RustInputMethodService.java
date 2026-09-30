@@ -737,6 +737,7 @@ public class RustInputMethodService extends InputMethodService {
                 discardNextTranscription = false;
                 cancelRequested = false;
                 selectionToEdit = null;
+                pendingSwitchBack = false;
                 finishOperation(getString(R.string.ime_canceled));
                 return;
             }
@@ -937,6 +938,9 @@ public class RustInputMethodService extends InputMethodService {
     /** Cancels capture immediately, or makes an already-running result a no-op. */
     private void cancelCurrentOperation() {
         clearUndo();
+        // Canceling also drops a switch-back requested by stopping with the
+        // switch-keyboard button; the user chose to stay here instead.
+        pendingSwitchBack = false;
         if (isRecording) {
             boolean fellBackToTranscription = false;
             try {
@@ -1069,6 +1073,12 @@ public class RustInputMethodService extends InputMethodService {
         if (statusView != null) statusView.setText(message);
         if (hintView != null) hintView.setText("Tap to Record");
         applyMicEnabledState();
+        // A voice edit stopped with the switch-keyboard button ends here
+        // rather than in deliverText; cancel paths clear the flag first.
+        if (pendingSwitchBack) {
+            pendingSwitchBack = false;
+            switchToPreviousInputMethod();
+        }
     }
 
     private void showStatus(int stringId) {

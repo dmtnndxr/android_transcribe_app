@@ -46,6 +46,12 @@ public final class PostProcessClient {
     /** Guards against a runaway model filling the text field. */
     static final int MAX_RESPONSE_BYTES = 256 * 1024;
     static final int MAX_OUTPUT_TOKENS = 2048;
+    /**
+     * Upper bound for a selection edit. Providers reject a max_tokens above
+     * the model's own output limit, and 8192 is within it for every model
+     * worth using here; a selection too long for it fails cleanly instead.
+     */
+    static final int MAX_EDIT_OUTPUT_TOKENS = 8192;
 
     /** Placeholder replaced with the raw transcription, as in Handy. */
     static final String PLACEHOLDER = "${output}";
@@ -327,7 +333,8 @@ public final class PostProcessClient {
             root.put("temperature", 0);
             // Required by some OpenAI-compatible layers (Anthropic's, for one)
             // and a useful ceiling everywhere else: a rewrite of dictated text
-            // is never long, so this only ever truncates a runaway response.
+            // is never long, so this only ever stops a runaway response, which
+            // extractContent then rejects rather than inserting it.
             root.put("max_tokens", MAX_OUTPUT_TOKENS);
             if (skipReasoning) {
                 // OpenRouter's unified reasoning parameter.
@@ -363,7 +370,7 @@ public final class PostProcessClient {
             root.put("messages", messages);
             root.put("stream", false);
             root.put("temperature", 0);
-            root.put("max_tokens", MAX_OUTPUT_TOKENS);
+            root.put("max_tokens", editOutputTokens(selectedText));
             if (skipReasoning) {
                 root.put("reasoning", new JSONObject().put("effort", "none"));
             }
@@ -371,6 +378,18 @@ public final class PostProcessClient {
         } catch (JSONException e) {
             throw new IllegalStateException("failed to build request body", e);
         }
+    }
+
+    /**
+     * Output budget for rewriting {@code selectedText}. A selection, unlike a
+     * dictated sentence, can be long, and an instruction like "translate this"
+     * can make it longer. One token per character over-estimates every script
+     * (English runs ~4 characters a token, CJK ~1), and doubling that leaves
+     * room for the rewrite to grow.
+     */
+    static int editOutputTokens(String selectedText) {
+        long wanted = 2L * selectedText.length();
+        return (int) Math.max(MAX_OUTPUT_TOKENS, Math.min(wanted, MAX_EDIT_OUTPUT_TOKENS));
     }
 
     private static JSONObject message(String role, String content) throws JSONException {
@@ -401,9 +420,15 @@ public final class PostProcessClient {
             if (choices == null || choices.length() == 0) {
                 throw new PostProcessException("unexpected response from the server");
             }
-            JSONObject msg = choices.getJSONObject(0).optJSONObject("message");
+            JSONObject choice = choices.getJSONObject(0);
+            JSONObject msg = choice.optJSONObject("message");
             if (msg == null) {
                 throw new PostProcessException("unexpected response from the server");
+            }
+            // A reply that hit max_tokens is missing its end. Inserting it
+            // would silently drop the rest of the user's text.
+            if ("length".equals(choice.optString("finish_reason"))) {
+                throw new PostProcessException("the model's reply was cut off (text too long)");
             }
 
             String content;
