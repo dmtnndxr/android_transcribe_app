@@ -58,6 +58,12 @@
             android:configChanges="orientation|keyboardHidden|screenSize"
             android:exported="false" />
 
+        <activity
+            android:name=".SelectionEditActivity"
+            android:label="@string/selection_title"
+            android:configChanges="orientation|keyboardHidden|screenSize"
+            android:exported="false" />
+
         <!-- Live Subtitles Activity (for permissions) -->
         <activity
             android:name=".LiveSubtitleActivity"

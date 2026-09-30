@@ -27,6 +27,8 @@ import com.google.android.material.snackbar.Snackbar;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
+import java.util.Set;
 
 public class MainActivity extends AppCompatActivity {
     private static final String TAG = "MainActivity";
@@ -50,6 +52,7 @@ public class MainActivity extends AppCompatActivity {
     private Button startSubsButton;
     private Button benchButton;
     private TextView benchResultText;
+    private Button punctuationKeysButton;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -63,6 +66,7 @@ public class MainActivity extends AppCompatActivity {
         voiceTryButton = findViewById(R.id.btn_voice_try);
         startSubsButton = findViewById(R.id.btn_subs_start);
         Button imeSettingsButton = findViewById(R.id.btn_ime_settings);
+        punctuationKeysButton = findViewById(R.id.btn_punctuation_keys);
         Button voiceHelpButton = findViewById(R.id.btn_voice_help);
 
         voiceGrantButton.setOnClickListener(v -> checkAndRequestPermissions());
@@ -73,6 +77,8 @@ public class MainActivity extends AppCompatActivity {
              Intent intent = new Intent(Settings.ACTION_INPUT_METHOD_SETTINGS);
              startActivity(intent);
         });
+        punctuationKeysButton.setOnClickListener(v -> showPunctuationKeysDialog());
+        updatePunctuationKeysButton();
 
         startSubsButton.setOnClickListener(v -> {
             Intent intent = new Intent(this, LiveSubtitleActivity.class);
@@ -86,6 +92,9 @@ public class MainActivity extends AppCompatActivity {
 
         findViewById(R.id.btn_post_process).setOnClickListener(v ->
                 startActivity(new Intent(this, PostProcessActivity.class)));
+
+        findViewById(R.id.btn_selection_edit).setOnClickListener(v ->
+                startActivity(new Intent(this, SelectionEditActivity.class)));
 
         benchButton = findViewById(R.id.btn_benchmark);
         benchResultText = findViewById(R.id.text_bench_result);
@@ -154,6 +163,41 @@ public class MainActivity extends AppCompatActivity {
         super.onResume();
         // Re-check on return from the keyboard chooser, settings, or a test run.
         updateVoiceInputStatus();
+        updatePunctuationKeysButton();
+    }
+
+    private void showPunctuationKeysDialog() {
+        Set<String> current = PunctuationPrefs.getSelected(this);
+        boolean[] checked = new boolean[PunctuationPrefs.AVAILABLE.length];
+        for (int i = 0; i < PunctuationPrefs.AVAILABLE.length; i++) {
+            checked[i] = current.contains(PunctuationPrefs.AVAILABLE[i]);
+        }
+
+        new MaterialAlertDialogBuilder(this)
+                .setTitle(R.string.setting_punctuation_keys)
+                .setMultiChoiceItems(PunctuationPrefs.AVAILABLE, checked,
+                        (dialog, which, isChecked) -> checked[which] = isChecked)
+                .setNegativeButton(android.R.string.cancel, null)
+                .setPositiveButton(android.R.string.ok, (dialog, which) -> {
+                    Set<String> selected = new LinkedHashSet<>();
+                    for (int i = 0; i < PunctuationPrefs.AVAILABLE.length; i++) {
+                        if (checked[i]) selected.add(PunctuationPrefs.AVAILABLE[i]);
+                    }
+                    if (!PunctuationPrefs.saveSelected(this, selected)) {
+                        snackbar(getString(R.string.setting_punctuation_keys_save_error));
+                    }
+                    updatePunctuationKeysButton();
+                })
+                .show();
+    }
+
+    private void updatePunctuationKeysButton() {
+        if (punctuationKeysButton == null) return;
+        Set<String> selected = PunctuationPrefs.getSelected(this);
+        String value = selected.isEmpty()
+                ? getString(R.string.setting_punctuation_keys_none)
+                : android.text.TextUtils.join("  ", selected);
+        punctuationKeysButton.setText(getString(R.string.setting_punctuation_keys_shown, value));
     }
 
     /**

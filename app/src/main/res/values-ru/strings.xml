@@ -6,6 +6,12 @@
     <string name="section_ime">Альтернатива: голосовая клавиатура</string>
     <string name="desc_ime">Предпочитаете отдельную клавиатуру? Включите клавиатуру Offline Voice Input и переключайтесь на неё через переключатель клавиатур, когда хотите голосовой ввод как отдельную клавиатуру.</string>
     <string name="btn_ime_settings">Открыть настройки клавиатуры</string>
+    <string name="setting_punctuation_keys">Клавиши редактирования</string>
+    <string name="setting_punctuation_keys_desc">Выберите знаки препинания на панели голосовой клавиатуры для быстрой ручной правки. Пробел и удаление доступны всегда.</string>
+    <string name="setting_punctuation_keys_shown">Показывать: %1$s</string>
+    <string name="setting_punctuation_keys_none">Нет</string>
+    <string name="setting_punctuation_keys_save_error">Не удалось сохранить набор клавиш.</string>
+    <string name="ime_insert_symbol">Вставить %1$s</string>
 
     <string name="section_subs">Субтитры в реальном времени</string>
     <string name="desc_subs">Показывайте субтитры для любого аудио, воспроизводимого на устройстве. После запуска выберите \'Демонстрация всего экрана\' для лучших результатов.</string>
@@ -107,6 +113,31 @@
     <string name="desc_post_process">Добавляет второй микрофон на голосовую клавиатуру. Распознанный текст обрабатывается моделью ИИ перед вставкой: можно исправлять текст, форматировать, переводить или выполнять свой промпт. По умолчанию выключено; обычный микрофон всегда работает полностью офлайн.</string>
     <string name="btn_post_process">Настроить постобработку с ИИ</string>
 
+    <string name="selection_title">Редактирование выделенного текста</string>
+    <string name="selection_main_desc">Настройте волшебную палочку, которая применяет голосовую команду к выделенному тексту. Сервер и API-ключ общие, а модель по умолчанию берётся из постобработки.</string>
+    <string name="selection_open_settings">Настроить редактирование выделения</string>
+    <string name="selection_connection_section">Общее подключение к ИИ</string>
+    <string name="selection_connection_desc">Адрес сервера и API-ключ используются совместно с постобработкой и изменяются в её настройках.</string>
+    <string name="selection_connection_ready">Общее подключение к серверу настроено.</string>
+    <string name="selection_connection_disabled">Постобработка с ИИ выключена. Включите её, чтобы палочка появилась на голосовой клавиатуре.</string>
+    <string name="selection_connection_missing">Адрес общего сервера ещё не настроен.</string>
+    <string name="selection_open_post_process">Открыть настройки постобработки</string>
+    <string name="selection_model_section">Модель</string>
+    <string name="selection_model_inherited">Сейчас используется общая модель: %1$s</string>
+    <string name="selection_model_missing">Общая модель ещё не настроена.</string>
+    <string name="selection_model_override">Другая модель (необязательно)</string>
+    <string name="selection_model_desc">Оставьте поле пустым, чтобы использовать модель из постобработки. Укажите модель только если для редактирования нужна другая.</string>
+    <string name="selection_use_shared_model">Использовать общую модель</string>
+    <string name="selection_model_reset">Теперь используется общая модель постобработки</string>
+    <string name="selection_prompt_section">Системный промпт</string>
+    <string name="selection_prompt_desc">Эта постоянная инструкция определяет правила редактирования. Голосовая команда и выделенный текст отправляются отдельно.</string>
+    <string name="selection_system_prompt">Системный промпт</string>
+    <string name="selection_prompt_reset">Системный промпт сброшен</string>
+    <string name="selection_test_desc">Проверяет выбранную модель и системный промпт на тестовом выделении и команде.</string>
+    <string name="selection_test">Проверить редактирование</string>
+    <string name="selection_test_incomplete">Сначала настройте общий сервер и модель.</string>
+    <string name="selection_test_ok">Работает.\n\nКоманда:\n%1$s\n\nВыделенный текст:\n%2$s\n\nЗамена:\n%3$s</string>
+
     <string name="ime_stop_label">Остановить</string>
     <string name="ime_ai_mic_label">Диктовка с ИИ</string>
     <string name="ime_ai_mic_desc">Начать диктовку с постобработкой ИИ</string>
@@ -115,10 +146,29 @@
     <string name="ime_ai_working_hint">Отправка модели ИИ</string>
     <string name="ime_ai_failed">Постобработка с ИИ не выполнена (%1$s) — вставлен распознанный текст</string>
     <string name="ime_ai_not_configured">Постобработка с ИИ не настроена — вставлен распознанный текст</string>
+    <string name="ime_cancel">Отмена</string>
+    <string name="ime_undo">Отменить</string>
+    <string name="ime_canceled">Отменено</string>
+    <string name="ime_canceling">Отменяю…</string>
+    <string name="ime_text_inserted">Текст вставлен</string>
+    <string name="ime_change_applied">Текст изменён</string>
+    <string name="ime_undo_done">Изменение отменено</string>
+    <string name="ime_undo_unavailable">Не удалось отменить: текст уже изменён</string>
+    <string name="ime_edit_selection_label">Изменить</string>
+    <string name="ime_edit_selection_desc">Изменить выделенный текст голосовой командой</string>
+    <string name="ime_edit_not_configured">Сначала настройте постобработку с ИИ</string>
+    <string name="ime_edit_select_first">Сначала выделите текст</string>
+    <string name="ime_edit_password">Редактирование выделения недоступно в защищённых полях</string>
+    <string name="ime_edit_listening">Слушаю команду…</string>
+    <string name="ime_edit_working">Изменяю выделенный текст…</string>
+    <string name="ime_edit_working_hint">Не изменяйте выделение</string>
+    <string name="ime_edit_failed">Не удалось изменить текст: %1$s</string>
+    <string name="ime_edit_selection_changed">Выделение изменилось — текст не заменён</string>
+    <string name="ime_edit_no_change">Модель не внесла изменений</string>
 
     <string name="pp_title">Постобработка с ИИ</string>
     <string name="pp_enable">Включить постобработку с ИИ</string>
-    <string name="pp_enable_desc">Показывает второй микрофон на голосовой клавиатуре. Обычный микрофон не меняется и никуда не отправляет данные.</string>
+    <string name="pp_enable_desc">Показывает диктовку с ИИ и редактирование выделенного текста. Обычный микрофон не меняется и никуда не отправляет данные.</string>
     <string name="pp_privacy_warning">Текст, продиктованный через второй микрофон, покидает устройство и отправляется на указанный ниже сервер. Используйте локальный сервер, если хотите оставить данные в своей сети.</string>
 
     <string name="voice_help_title">Настройка голосового ввода</string>

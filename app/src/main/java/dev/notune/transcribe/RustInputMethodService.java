@@ -9,13 +9,18 @@ import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.ProgressBar;
+import android.view.Gravity;
 import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
+import android.util.TypedValue;
 import android.content.Context;
 import android.content.pm.PackageManager;
 import android.view.MotionEvent;
 import android.view.inputmethod.EditorInfo;
+import android.view.inputmethod.ExtractedText;
+import android.view.inputmethod.ExtractedTextRequest;
+import android.text.InputType;
 import android.content.res.ColorStateList;
 import android.view.ContextThemeWrapper;
 import java.io.File;
@@ -45,6 +50,7 @@ public class RustInputMethodService extends InputMethodService {
     private View spaceButton;
     private View enterButton;
     private View switchKeyboardButton;
+    private LinearLayout punctuationRow;
     private View inputView;
     private MicLevelView micLevelView;
     private View recordCircle;
@@ -53,6 +59,11 @@ public class RustInputMethodService extends InputMethodService {
     private View aiContainer;
     private android.widget.ImageView aiMicIcon;
     private TextView aiLabel;
+    private View editContainer;
+    private android.widget.ImageView editSelectionButton;
+    private TextView editLabel;
+    private Button cancelAction;
+    private Button undoAction;
     /**
      * Whether the recording in flight (or about to start) should be
      * post-processed. Latched when the mic is tapped so a settings change
@@ -61,6 +72,21 @@ public class RustInputMethodService extends InputMethodService {
     private boolean postProcessNext = false;
     /** True while an LLM request is outstanding, to keep both mics disabled. */
     private boolean postProcessRunning = false;
+    /** True after capture stops and until the native transcription callback arrives. */
+    private boolean transcriptionPending = false;
+    /** A canceled native transcription cannot always be interrupted; discard its callback. */
+    private boolean discardNextTranscription = false;
+    private boolean cancelRequested = false;
+    /** The third capture mode: a spoken instruction over a frozen selection. */
+    private boolean editSelectionNext = false;
+    private SelectionSnapshot selectionToEdit = null;
+    /** Invalidates an outstanding LLM callback without needing to kill its worker thread. */
+    private long llmGeneration = 0;
+    /** Changes whenever Android attaches this IME to another editor. */
+    private long editorGeneration = 0;
+    private UndoState undoState = null;
+    private static final long UNDO_TIMEOUT_MS = 12_000;
+    private final Runnable expireUndo = () -> clearUndo();
     // Night flag the current input view was inflated with, so it can be rebuilt
     // if the theme preference changes while this process stays alive.
     private boolean viewIsNight = false;
@@ -141,13 +167,22 @@ public class RustInputMethodService extends InputMethodService {
             spaceButton = view.findViewById(R.id.ime_space);
             enterButton = view.findViewById(R.id.ime_enter);
             switchKeyboardButton = view.findViewById(R.id.ime_switch_keyboard);
+            punctuationRow = view.findViewById(R.id.ime_punctuation_row);
             aiContainer = view.findViewById(R.id.ime_ai_container);
             aiMicIcon = view.findViewById(R.id.ime_ai_mic);
             aiLabel = view.findViewById(R.id.ime_ai_label);
+            editContainer = view.findViewById(R.id.ime_edit_container);
+            editSelectionButton = view.findViewById(R.id.ime_edit_selection);
+            editLabel = view.findViewById(R.id.ime_edit_label);
+            cancelAction = view.findViewById(R.id.ime_cancel_action);
+            undoAction = view.findViewById(R.id.ime_undo_action);
+
+            updatePunctuationKeys();
 
             switchKeyboardButton.setOnClickListener(v -> {
                 if (isRecording) {
                     pendingSwitchBack = true;
+                    transcriptionPending = true;
                     stopRecording();
                     updateRecordButtonUI(false);
                 } else {
@@ -248,10 +283,16 @@ public class RustInputMethodService extends InputMethodService {
             if (aiMicIcon != null) {
                 aiMicIcon.setOnClickListener(v -> onMicTap(true));
             }
+            if (editSelectionButton != null) {
+                editSelectionButton.setOnClickListener(v -> onEditSelectionTap());
+            }
+            if (cancelAction != null) cancelAction.setOnClickListener(v -> cancelCurrentOperation());
+            if (undoAction != null) undoAction.setOnClickListener(v -> undoLastChange());
 
             tintRecordButton(false);
             tintAiMic(false);
             updateAiMicVisibility();
+            updateEditSelectionEnabled();
             updateUiState();
             return view;
         } catch (Exception e) {
@@ -288,6 +329,9 @@ public class RustInputMethodService extends InputMethodService {
                 // Auto-start is the plain path: post-processing is opt-in per
                 // recording, via its own button.
                 postProcessNext = false;
+                editSelectionNext = false;
+                selectionToEdit = null;
+                clearUndo();
                 startRecording();
                 updateRecordButtonUI(true);
             }
@@ -301,12 +345,22 @@ public class RustInputMethodService extends InputMethodService {
         if (isRecording) {
             if (isStopOnHideEnabled()) {
                 // Opt-in behavior: discard the recording when the keyboard hides.
+                boolean fellBackToTranscription = false;
                 try {
                     cancelRecording();
                 } catch (Throwable t) {
                     Log.w(TAG, "cancelRecording failed, falling back to stopRecording", t);
-                    try { stopRecording(); } catch (Throwable ignored) { }
+                    try {
+                        stopRecording();
+                        fellBackToTranscription = true;
+                    } catch (Throwable ignored) { }
                 }
+                postProcessNext = false;
+                editSelectionNext = false;
+                selectionToEdit = null;
+                transcriptionPending = fellBackToTranscription;
+                discardNextTranscription = fellBackToTranscription;
+                cancelRequested = fellBackToTranscription;
                 updateRecordButtonUI(false);
             } else {
                 // Default: keep recording in the background. The transcription
@@ -323,6 +377,8 @@ public class RustInputMethodService extends InputMethodService {
     @Override
     public void onStartInput(EditorInfo attribute, boolean restarting) {
         super.onStartInput(attribute, restarting);
+        editorGeneration++;
+        clearUndo();
         inputActive = true;
     }
 
@@ -339,27 +395,43 @@ public class RustInputMethodService extends InputMethodService {
         // Post-processing may have been switched on or off in the app since this
         // (long-lived) IME process last inflated its view.
         updateAiMicVisibility();
+        // The set of manual editing keys may have changed in the app while the
+        // long-lived IME process was in the background.
+        updatePunctuationKeys();
         // A field is focused and the input connection is live again — commit any
         // text that finished transcribing while nothing was focused.
         flushPendingText();
+        updateEditSelectionEnabled();
     }
 
     @Override
     public void onFinishInput() {
         super.onFinishInput();
+        editorGeneration++;
+        clearUndo();
         inputActive = false;
+    }
+
+    @Override
+    public void onUpdateSelection(int oldSelStart, int oldSelEnd,
+                                  int newSelStart, int newSelEnd,
+                                  int candidatesStart, int candidatesEnd) {
+        super.onUpdateSelection(oldSelStart, oldSelEnd, newSelStart, newSelEnd,
+                candidatesStart, candidatesEnd);
+        updateEditSelectionEnabled();
     }
 
     /**
      * Shared handler for both mics. {@code postProcess} selects the AI-cleanup
      * variant; capture itself is identical either way, so the flag only decides
-     * what happens to the text once transcription finishes. Either mic stops a
-     * running recording, and the one used to stop decides: a plain dictation
-     * stopped with the AI mic still gets cleaned up, and vice versa.
+     * what happens to the text once transcription finishes. Either mic can stop
+     * a running recording, but the mode chosen when recording began is retained.
      */
     private void onMicTap(boolean postProcess) {
         if (isRecording) {
-            postProcessNext = postProcess;
+            // Stopping from a sibling button must not silently change the mode
+            // chosen when capture began (especially selection editing).
+            transcriptionPending = true;
             stopRecording();
             if (pauseAudioActive) {
                 audioPauser.abandon(this);
@@ -376,7 +448,52 @@ public class RustInputMethodService extends InputMethodService {
             return;
         }
 
+        clearUndo();
         postProcessNext = postProcess;
+        editSelectionNext = false;
+        selectionToEdit = null;
+        discardNextTranscription = false;
+        cancelRequested = false;
+        if (isPauseAudioEnabled()) {
+            audioPauser.request(this);
+            pauseAudioActive = true;
+        }
+        startRecording();
+        updateRecordButtonUI(true);
+    }
+
+    /** Starts recording a one-off instruction for the currently selected text. */
+    private void onEditSelectionTap() {
+        if (isRecording) {
+            onMicTap(false);
+            return;
+        }
+        if (!SelectionEditPrefs.isConfigured(this)) {
+            showStatus(R.string.ime_edit_not_configured);
+            return;
+        }
+        if (isSecureEditor()) {
+            showStatus(R.string.ime_edit_password);
+            return;
+        }
+        InputConnection ic = getCurrentInputConnection();
+        SelectionSnapshot snapshot = captureSelection(ic, true);
+        if (snapshot == null) {
+            showStatus(R.string.ime_edit_select_first);
+            return;
+        }
+        if (checkSelfPermission(android.Manifest.permission.RECORD_AUDIO)
+                != PackageManager.PERMISSION_GRANTED) {
+            if (statusView != null) statusView.setText("No mic permission - grant in app");
+            return;
+        }
+
+        clearUndo();
+        selectionToEdit = snapshot;
+        editSelectionNext = true;
+        postProcessNext = false;
+        discardNextTranscription = false;
+        cancelRequested = false;
         if (isPauseAudioEnabled()) {
             audioPauser.request(this);
             pauseAudioActive = true;
@@ -392,11 +509,14 @@ public class RustInputMethodService extends InputMethodService {
         if (inputView != null) {
             inputView.setKeepScreenOn(recording);
         }
-        boolean aiActive = recording && postProcessNext;
-        tintRecordButton(recording && !postProcessNext);
+        boolean editActive = recording && editSelectionNext;
+        boolean aiActive = recording && postProcessNext && !editActive;
+        tintRecordButton(recording && !postProcessNext && !editActive);
         tintAiMic(aiActive);
+        tintEditButton(editActive);
         if (recording) {
-            statusView.setText(aiActive ? getString(R.string.ime_ai_listening) : "Listening...");
+            statusView.setText(editActive ? getString(R.string.ime_edit_listening)
+                    : aiActive ? getString(R.string.ime_ai_listening) : "Listening...");
             hintView.setText("Tap to Stop");
             if (aiLabel != null) {
                 aiLabel.setText(aiActive ? R.string.ime_stop_label : R.string.ime_ai_mic_label);
@@ -405,6 +525,7 @@ public class RustInputMethodService extends InputMethodService {
             statusView.setText("Processing...");
             hintView.setText("Tap to Record");
             if (aiLabel != null) aiLabel.setText(R.string.ime_ai_mic_label);
+            if (editLabel != null) editLabel.setText(R.string.ime_edit_selection_label);
             if (micLevelView != null) micLevelView.setLevel(0f);
         }
         applyMicEnabledState();
@@ -412,9 +533,13 @@ public class RustInputMethodService extends InputMethodService {
 
     /** Shows the AI mic only when post-processing is switched on in the app. */
     private void updateAiMicVisibility() {
-        if (aiContainer == null) return;
-        aiContainer.setVisibility(
-                PostProcessPrefs.isEnabled(this) ? View.VISIBLE : View.GONE);
+        boolean visible = PostProcessPrefs.isEnabled(this);
+        if (aiContainer != null) {
+            aiContainer.setVisibility(visible ? View.VISIBLE : View.GONE);
+        }
+        if (editContainer != null) {
+            editContainer.setVisibility(visible ? View.VISIBLE : View.GONE);
+        }
     }
 
     /**
@@ -423,7 +548,7 @@ public class RustInputMethodService extends InputMethodService {
      * since either one can stop it (see {@link #onMicTap}).
      */
     private void applyMicEnabledState() {
-        boolean busy = postProcessRunning
+        boolean busy = postProcessRunning || transcriptionPending
                 || lastStatus.contains("Transcribing")
                 || lastStatus.contains("Processing")
                 || lastStatus.contains("Waiting")
@@ -439,6 +564,17 @@ public class RustInputMethodService extends InputMethodService {
         if (aiContainer != null && aiMicIcon != null) {
             aiMicIcon.setEnabled(aiEnabled);
             aiContainer.setAlpha(aiEnabled ? 1.0f : 0.5f);
+        }
+        if (editContainer != null && editSelectionButton != null) {
+            boolean editTappable = !busy;
+            boolean selectionReady = !isSecureEditor() && hasSelection();
+            editSelectionButton.setEnabled(editTappable);
+            editContainer.setAlpha(selectionReady && editTappable ? 1.0f : 0.45f);
+        }
+        if (cancelAction != null) {
+            boolean cancelable = (isRecording || transcriptionPending || postProcessRunning)
+                    && !cancelRequested;
+            cancelAction.setVisibility(cancelable ? View.VISIBLE : View.GONE);
         }
     }
 
@@ -477,9 +613,24 @@ public class RustInputMethodService extends InputMethodService {
         aiMicIcon.setColorFilter(MaterialColors.getColor(aiMicIcon, iconAttr));
     }
 
+    private void tintEditButton(boolean recording) {
+        if (editSelectionButton == null) return;
+        int circleAttr = recording
+                ? com.google.android.material.R.attr.colorSecondary
+                : com.google.android.material.R.attr.colorSecondaryContainer;
+        int iconAttr = recording
+                ? com.google.android.material.R.attr.colorOnSecondary
+                : com.google.android.material.R.attr.colorOnSecondaryContainer;
+        editSelectionButton.setBackgroundTintList(ColorStateList.valueOf(
+                MaterialColors.getColor(editSelectionButton, circleAttr)));
+        editSelectionButton.setColorFilter(MaterialColors.getColor(editSelectionButton, iconAttr));
+    }
+
     @Override
     public void onDestroy() {
         super.onDestroy();
+        if (mainHandler != null) mainHandler.removeCallbacks(expireUndo);
+        llmGeneration++;
         cleanupNative();
         if (pauseAudioActive) {
             audioPauser.abandon(this);
@@ -499,6 +650,18 @@ public class RustInputMethodService extends InputMethodService {
         mainHandler.post(() -> {
             Log.d(TAG, "Status: " + status);
             lastStatus = status;
+            if (status != null && status.startsWith("Error")) {
+                isRecording = false;
+                if (inputView != null) inputView.setKeepScreenOn(false);
+                transcriptionPending = false;
+                discardNextTranscription = false;
+                cancelRequested = false;
+                editSelectionNext = false;
+                selectionToEdit = null;
+                tintRecordButton(false);
+                tintAiMic(false);
+                tintEditButton(false);
+            }
             updateUiState();
             if (pendingSwitchBack && status.startsWith("Error")) {
                 pendingSwitchBack = false;
@@ -520,7 +683,7 @@ public class RustInputMethodService extends InputMethodService {
 
         // Don't show internal loading states to the user, and don't clobber the
         // Keep the AI-processing line while an LLM request is still in flight.
-        if (statusView != null && !isRecording && !postProcessRunning) {
+        if (statusView != null && !isRecording && !postProcessRunning && !cancelRequested) {
             if (isError) {
                 statusView.setText(lastStatus);
             } else if (isTranscribing || isWaiting) {
@@ -538,7 +701,7 @@ public class RustInputMethodService extends InputMethodService {
         // Disable the mics during transcription/processing/waiting or fatal errors
         applyMicEnabledState();
 
-        if (hintView != null && !isRecording && !postProcessRunning) {
+        if (hintView != null && !isRecording && !postProcessRunning && !cancelRequested) {
             hintView.setText("Tap to Record");
         }
     }
@@ -565,11 +728,23 @@ public class RustInputMethodService extends InputMethodService {
     public void onTextTranscribed(String text) {
         mainHandler.post(() -> {
             boolean postProcess = postProcessNext;
+            boolean editSelection = editSelectionNext;
             postProcessNext = false;
+            editSelectionNext = false;
+            transcriptionPending = false;
+
+            if (discardNextTranscription) {
+                discardNextTranscription = false;
+                cancelRequested = false;
+                selectionToEdit = null;
+                finishOperation(getString(R.string.ime_canceled));
+                return;
+            }
 
             if (text == null || text.trim().isEmpty()) {
                 // Nothing recognized — don't insert a stray space, and don't
                 // spend an LLM round-trip on an empty string.
+                selectionToEdit = null;
                 updateRecordButtonUI(false);
                 if (statusView != null) statusView.setText("Tap to Record");
                 if (pauseAudioActive) {
@@ -579,6 +754,15 @@ public class RustInputMethodService extends InputMethodService {
                 if (pendingSwitchBack) {
                     pendingSwitchBack = false;
                     switchToPreviousInputMethod();
+                }
+                return;
+            }
+
+            if (editSelection) {
+                if (selectionToEdit == null) {
+                    finishOperation(getString(R.string.ime_edit_selection_changed));
+                } else {
+                    startSelectionPostProcessing(text);
                 }
                 return;
             }
@@ -606,6 +790,8 @@ public class RustInputMethodService extends InputMethodService {
      */
     private void startPostProcessing(String rawText) {
         postProcessRunning = true;
+        cancelRequested = false;
+        final long requestGeneration = ++llmGeneration;
         updateRecordButtonUI(false);
         // Recording is over, so hand audio focus back now instead of making the
         // user's music wait out the network round-trip.
@@ -621,6 +807,7 @@ public class RustInputMethodService extends InputMethodService {
             @Override
             public void onSuccess(String processed) {
                 mainHandler.post(() -> {
+                    if (requestGeneration != llmGeneration) return;
                     postProcessRunning = false;
                     deliverText(processed, null);
                 });
@@ -629,9 +816,49 @@ public class RustInputMethodService extends InputMethodService {
             @Override
             public void onFailure(String message) {
                 mainHandler.post(() -> {
+                    if (requestGeneration != llmGeneration) return;
                     postProcessRunning = false;
                     Log.w(TAG, "Post-processing failed, inserting raw text: " + message);
                     deliverText(rawText, getString(R.string.ime_ai_failed, message));
+                });
+            }
+        });
+    }
+
+    /** Runs the spoken instruction and replaces only the still-identical selection. */
+    private void startSelectionPostProcessing(String instruction) {
+        final SelectionSnapshot target = selectionToEdit;
+        postProcessRunning = true;
+        cancelRequested = false;
+        final long requestGeneration = ++llmGeneration;
+        updateRecordButtonUI(false);
+        if (pauseAudioActive) {
+            audioPauser.abandon(this);
+            pauseAudioActive = false;
+        }
+        if (statusView != null) statusView.setText(R.string.ime_edit_working);
+        if (hintView != null) hintView.setText(R.string.ime_edit_working_hint);
+        applyMicEnabledState();
+
+        PostProcessor.editSelectionAsync(this, instruction, target.text,
+                new PostProcessor.Callback() {
+            @Override
+            public void onSuccess(String processed) {
+                mainHandler.post(() -> {
+                    if (requestGeneration != llmGeneration) return;
+                    postProcessRunning = false;
+                    selectionToEdit = null;
+                    applySelectionEdit(target, processed);
+                });
+            }
+
+            @Override
+            public void onFailure(String message) {
+                mainHandler.post(() -> {
+                    if (requestGeneration != llmGeneration) return;
+                    postProcessRunning = false;
+                    selectionToEdit = null;
+                    finishOperation(getString(R.string.ime_edit_failed, message));
                 });
             }
         });
@@ -663,7 +890,8 @@ public class RustInputMethodService extends InputMethodService {
         }
         updateRecordButtonUI(false);
         if (statusView != null) {
-            statusView.setText(statusMessage != null ? statusMessage : "Tap to Record");
+            statusView.setText(statusMessage != null
+                    ? statusMessage : getString(R.string.ime_text_inserted));
         }
         if (pendingSwitchBack) {
             pendingSwitchBack = false;
@@ -674,13 +902,18 @@ public class RustInputMethodService extends InputMethodService {
     // Commits transcribed text into the active input connection, optionally
     // selecting it afterwards (select_transcription setting).
     private void commitTranscribedText(InputConnection ic, String committed) {
+        SelectionSnapshot before = captureSelection(ic, false);
         ic.commitText(committed, 1);
+
+        if (before != null) {
+            offerUndo(before.text, committed, before.start, before.editorGeneration);
+        }
 
         if (!pendingSwitchBack && new File(getFilesDir(), "select_transcription").exists()) {
             android.view.inputmethod.ExtractedText et = ic.getExtractedText(
                 new android.view.inputmethod.ExtractedTextRequest(), 0);
             if (et != null) {
-                int end = et.selectionStart;
+                int end = et.startOffset + et.selectionStart;
                 int start = end - committed.length();
                 if (start >= 0) {
                     ic.setSelection(start, end);
@@ -699,6 +932,272 @@ public class RustInputMethodService extends InputMethodService {
             commitTranscribedText(ic, pendingCommitText);
             pendingCommitText = null;
         }
+    }
+
+    /** Cancels capture immediately, or makes an already-running result a no-op. */
+    private void cancelCurrentOperation() {
+        clearUndo();
+        if (isRecording) {
+            boolean fellBackToTranscription = false;
+            try {
+                cancelRecording();
+            } catch (Throwable t) {
+                Log.w(TAG, "Couldn't cancel recording", t);
+                try {
+                    stopRecording();
+                    fellBackToTranscription = true;
+                } catch (Throwable stopError) {
+                    Log.w(TAG, "Couldn't stop recording after cancel failed", stopError);
+                }
+            }
+            postProcessNext = false;
+            editSelectionNext = false;
+            selectionToEdit = null;
+            discardNextTranscription = fellBackToTranscription;
+            transcriptionPending = fellBackToTranscription;
+            cancelRequested = fellBackToTranscription;
+            if (pauseAudioActive) {
+                audioPauser.abandon(this);
+                pauseAudioActive = false;
+            }
+            isRecording = false;
+            if (inputView != null) inputView.setKeepScreenOn(false);
+            tintRecordButton(false);
+            tintAiMic(false);
+            tintEditButton(false);
+            finishOperation(getString(fellBackToTranscription
+                    ? R.string.ime_canceling : R.string.ime_canceled));
+            if (fellBackToTranscription) {
+                cancelRequested = true;
+                applyMicEnabledState();
+            }
+            return;
+        }
+        if (transcriptionPending) {
+            // The offline engine owns a copied audio buffer now. Its current API
+            // has no post-stop interrupt, so keep the UI locked until its callback
+            // arrives and guarantee that callback is discarded.
+            discardNextTranscription = true;
+            cancelRequested = true;
+            selectionToEdit = null;
+            if (statusView != null) statusView.setText(R.string.ime_canceling);
+            if (hintView != null) hintView.setText(R.string.ime_canceling);
+            applyMicEnabledState();
+            return;
+        }
+        if (postProcessRunning) {
+            llmGeneration++;
+            postProcessRunning = false;
+            cancelRequested = false;
+            selectionToEdit = null;
+            finishOperation(getString(R.string.ime_canceled));
+        }
+    }
+
+    private void applySelectionEdit(SelectionSnapshot target, String replacement) {
+        InputConnection ic = getCurrentInputConnection();
+        SelectionSnapshot current = captureSelection(ic, true);
+        if (current == null
+                || current.editorGeneration != target.editorGeneration
+                || current.start != target.start
+                || current.end != target.end
+                || !current.text.equals(target.text)) {
+            finishOperation(getString(R.string.ime_edit_selection_changed));
+            return;
+        }
+        if (target.text.equals(replacement)) {
+            finishOperation(getString(R.string.ime_edit_no_change));
+            return;
+        }
+
+        ic.beginBatchEdit();
+        try {
+            ic.commitText(replacement, 1);
+        } finally {
+            ic.endBatchEdit();
+        }
+        offerUndo(target.text, replacement, target.start, target.editorGeneration);
+        finishOperation(getString(R.string.ime_change_applied));
+    }
+
+    /** Offers a guarded undo: it only runs if our inserted range is unchanged. */
+    private void offerUndo(String original, String inserted, int start, long generation) {
+        if (start < 0 || inserted == null) return;
+        undoState = new UndoState(original == null ? "" : original, inserted,
+                start, start + inserted.length(), generation);
+        mainHandler.removeCallbacks(expireUndo);
+        mainHandler.postDelayed(expireUndo, UNDO_TIMEOUT_MS);
+        if (undoAction != null) undoAction.setVisibility(View.VISIBLE);
+    }
+
+    private void undoLastChange() {
+        UndoState undo = undoState;
+        InputConnection ic = getCurrentInputConnection();
+        if (undo == null || ic == null || undo.editorGeneration != editorGeneration
+                || !undo.inserted.equals(textInRange(ic, undo.start, undo.end))) {
+            clearUndo();
+            showStatus(R.string.ime_undo_unavailable);
+            return;
+        }
+
+        ic.beginBatchEdit();
+        boolean selected;
+        try {
+            selected = ic.setSelection(undo.start, undo.end);
+            if (selected) ic.commitText(undo.original, 1);
+        } finally {
+            ic.endBatchEdit();
+        }
+        clearUndo();
+        showStatus(selected ? R.string.ime_undo_done : R.string.ime_undo_unavailable);
+    }
+
+    private void clearUndo() {
+        undoState = null;
+        if (mainHandler != null) mainHandler.removeCallbacks(expireUndo);
+        if (undoAction != null) undoAction.setVisibility(View.GONE);
+    }
+
+    private void finishOperation(String message) {
+        isRecording = false;
+        cancelRequested = false;
+        if (inputView != null) inputView.setKeepScreenOn(false);
+        if (micLevelView != null) micLevelView.setLevel(0f);
+        tintRecordButton(false);
+        tintAiMic(false);
+        tintEditButton(false);
+        if (statusView != null) statusView.setText(message);
+        if (hintView != null) hintView.setText("Tap to Record");
+        applyMicEnabledState();
+    }
+
+    private void showStatus(int stringId) {
+        if (statusView != null) statusView.setText(stringId);
+    }
+
+    /** Captures both the selected value and its absolute editor range. */
+    private SelectionSnapshot captureSelection(InputConnection ic, boolean requireNonEmpty) {
+        if (ic == null || !inputActive) return null;
+        ExtractedText extracted = ic.getExtractedText(new ExtractedTextRequest(), 0);
+        if (extracted == null || extracted.selectionStart < 0 || extracted.selectionEnd < 0) {
+            return null;
+        }
+        int start = extracted.startOffset
+                + Math.min(extracted.selectionStart, extracted.selectionEnd);
+        int end = extracted.startOffset
+                + Math.max(extracted.selectionStart, extracted.selectionEnd);
+        CharSequence selected = ic.getSelectedText(0);
+        String text = selected == null ? "" : selected.toString();
+        if (requireNonEmpty && (start == end || text.isEmpty())) return null;
+        return new SelectionSnapshot(text, start, end, editorGeneration);
+    }
+
+    private String textInRange(InputConnection ic, int start, int end) {
+        ExtractedText extracted = ic.getExtractedText(new ExtractedTextRequest(), 0);
+        if (extracted == null || extracted.text == null) return null;
+        int localStart = start - extracted.startOffset;
+        int localEnd = end - extracted.startOffset;
+        if (localStart < 0 || localEnd < localStart || localEnd > extracted.text.length()) {
+            return null;
+        }
+        return extracted.text.subSequence(localStart, localEnd).toString();
+    }
+
+    private boolean hasSelection() {
+        InputConnection ic = getCurrentInputConnection();
+        return captureSelection(ic, true) != null;
+    }
+
+    private boolean isSecureEditor() {
+        EditorInfo info = getCurrentInputEditorInfo();
+        if (info == null) return false;
+        int typeClass = info.inputType & InputType.TYPE_MASK_CLASS;
+        int variation = info.inputType & InputType.TYPE_MASK_VARIATION;
+        if (typeClass == InputType.TYPE_CLASS_NUMBER) {
+            return variation == InputType.TYPE_NUMBER_VARIATION_PASSWORD;
+        }
+        return typeClass == InputType.TYPE_CLASS_TEXT
+                && (variation == InputType.TYPE_TEXT_VARIATION_PASSWORD
+                || variation == InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD
+                || variation == InputType.TYPE_TEXT_VARIATION_WEB_PASSWORD);
+    }
+
+    private void updateEditSelectionEnabled() {
+        if (editSelectionButton == null || editContainer == null) return;
+        boolean busy = isRecording || transcriptionPending || postProcessRunning;
+        boolean selectionReady = !isSecureEditor() && hasSelection();
+        editSelectionButton.setEnabled(!busy);
+        editContainer.setAlpha(!busy && selectionReady ? 1.0f : 0.45f);
+    }
+
+    private static final class SelectionSnapshot {
+        final String text;
+        final int start;
+        final int end;
+        final long editorGeneration;
+
+        SelectionSnapshot(String text, int start, int end, long editorGeneration) {
+            this.text = text;
+            this.start = start;
+            this.end = end;
+            this.editorGeneration = editorGeneration;
+        }
+    }
+
+    private static final class UndoState {
+        final String original;
+        final String inserted;
+        final int start;
+        final int end;
+        final long editorGeneration;
+
+        UndoState(String original, String inserted, int start, int end,
+                  long editorGeneration) {
+            this.original = original;
+            this.inserted = inserted;
+            this.start = start;
+            this.end = end;
+            this.editorGeneration = editorGeneration;
+        }
+    }
+
+    /** Rebuilds the configurable row of literal punctuation keys. */
+    private void updatePunctuationKeys() {
+        if (punctuationRow == null) return;
+        punctuationRow.removeAllViews();
+
+        java.util.Set<String> selected = PunctuationPrefs.getSelected(this);
+        punctuationRow.setVisibility(selected.isEmpty() ? View.GONE : View.VISIBLE);
+        int gap = dp(8);
+        int keyHeight = dp(44);
+        int index = 0;
+        for (String symbol : PunctuationPrefs.AVAILABLE) {
+            if (!selected.contains(symbol)) continue;
+
+            TextView key = new TextView(punctuationRow.getContext());
+            LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
+                    0, keyHeight, 1f);
+            if (index++ > 0) params.setMarginStart(gap);
+            key.setLayoutParams(params);
+            key.setGravity(Gravity.CENTER);
+            key.setText(symbol);
+            key.setTextSize(TypedValue.COMPLEX_UNIT_SP, 22);
+            key.setTextColor(MaterialColors.getColor(
+                    key, com.google.android.material.R.attr.colorOnSurfaceVariant));
+            key.setBackgroundResource(R.drawable.bg_ime_key);
+            key.setClickable(true);
+            key.setFocusable(true);
+            key.setContentDescription(getString(R.string.ime_insert_symbol, symbol));
+            key.setOnClickListener(v -> {
+                InputConnection ic = getCurrentInputConnection();
+                if (ic != null) ic.commitText(symbol, 1);
+            });
+            punctuationRow.addView(key);
+        }
+    }
+
+    private int dp(int value) {
+        return Math.round(value * getResources().getDisplayMetrics().density);
     }
     public void onAudioLevel(float level) {
         if (micLevelView != null) {

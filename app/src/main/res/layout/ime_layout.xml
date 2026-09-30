@@ -33,6 +33,32 @@
             android:layout_width="24dp"
             android:layout_height="24dp"
             android:visibility="gone"/>
+
+        <Button
+            android:id="@+id/ime_undo_action"
+            style="?android:attr/borderlessButtonStyle"
+            android:layout_width="wrap_content"
+            android:layout_height="40dp"
+            android:minWidth="0dp"
+            android:paddingStart="10dp"
+            android:paddingEnd="10dp"
+            android:text="@string/ime_undo"
+            android:textAllCaps="false"
+            android:textColor="?attr/colorPrimary"
+            android:visibility="gone"/>
+
+        <Button
+            android:id="@+id/ime_cancel_action"
+            style="?android:attr/borderlessButtonStyle"
+            android:layout_width="wrap_content"
+            android:layout_height="40dp"
+            android:minWidth="0dp"
+            android:paddingStart="10dp"
+            android:paddingEnd="10dp"
+            android:text="@string/ime_cancel"
+            android:textAllCaps="false"
+            android:textColor="?attr/colorError"
+            android:visibility="gone"/>
     </LinearLayout>
 
     <!-- Record area: pulsing mic-level glow behind a circular record button -->
@@ -63,6 +89,40 @@
             android:src="@drawable/ic_mic"
             android:layout_gravity="center"
             android:contentDescription="@string/section_ime"/>
+
+        <!-- Voice command that rewrites the currently selected editor text. -->
+        <LinearLayout
+            android:id="@+id/ime_edit_container"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:gravity="center_horizontal"
+            android:layout_gravity="center_vertical|start"
+            android:layout_marginStart="20dp"
+            android:visibility="gone">
+
+            <ImageView
+                android:id="@+id/ime_edit_selection"
+                android:layout_width="56dp"
+                android:layout_height="56dp"
+                android:padding="14dp"
+                android:src="@drawable/ic_magic_wand"
+                android:scaleType="fitCenter"
+                android:background="@drawable/bg_ime_mini_mic"
+                android:foreground="?attr/selectableItemBackgroundBorderless"
+                android:clickable="true"
+                android:focusable="true"
+                android:contentDescription="@string/ime_edit_selection_desc"/>
+
+            <TextView
+                android:id="@+id/ime_edit_label"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/ime_edit_selection_label"
+                android:layout_marginTop="6dp"
+                android:textColor="?attr/colorOnSurfaceVariant"
+                android:textAppearance="?attr/textAppearanceLabelSmall"/>
+        </LinearLayout>
 
         <!-- Secondary mic: records exactly like the main button, then sends the
              transcription through the configured LLM before inserting it.
@@ -110,6 +170,15 @@
             android:textColor="?attr/colorOnSurfaceVariant"
             android:textAppearance="?attr/textAppearanceBodySmall"/>
     </FrameLayout>
+
+    <!-- Optional literal punctuation keys for quick manual corrections. -->
+    <LinearLayout
+        android:id="@+id/ime_punctuation_row"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:baselineAligned="false"
+        android:paddingTop="8dp"/>
 
     <!-- Bottom key row -->
     <LinearLayout

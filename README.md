@@ -29,6 +29,7 @@ the [original Offline Voice Input from Google Play](https://play.google.com/stor
 - **Supported Languages:** Bulgarian, Croatian, Czech, Danish, Dutch, English, Estonian, Finnish, French, German, Greek, Hungarian, Italian, Latvian, Lithuanian, Maltese, Polish, Portuguese, Romanian, Slovak, Slovenian, Spanish, Swedish, Russian, Ukrainian.
 - **Custom models:** Import any [transcribe.cpp](https://github.com/handy-computer/transcribe.cpp) GGUF model (Whisper, Nemotron streaming, Canary, more Parakeet variants, …) from a downloaded file — the app stays fully offline; downloads happen in your browser.
 - **Optional AI cleanup:** A second microphone on the voice keyboard runs your transcription through an LLM before inserting it — fixing grammar, reformatting, translating, or whatever your prompt asks for. Works with any OpenAI-compatible endpoint, including a local Ollama or LM Studio. Off by default.
+- **Voice editing of selected text:** Select text in an editor, tap the wand on the voice keyboard, and speak an instruction such as “make this shorter.” The replacement is applied only if the same text is still selected.
 - **Efficient native backend:** All models run through [transcribe.cpp](https://github.com/handy-computer/transcribe.cpp) (ggml), wrapped in a safe Rust core.
 
 ## Screenshots
@@ -92,8 +93,14 @@ Set it up in the app under **AI cleanup**:
 4. Edit the **prompt** if you want. `${output}` is replaced with what you dictated; leave the placeholder out and your prompt is sent as an instruction with the transcription as a separate message.
 5. Hit **Send test sentence** to confirm it all works before relying on it mid-typing.
 
+The separate **Selected-text editing** settings page controls the wand. It reuses
+the AI-cleanup server, API key and model by default; you can override only the
+model, edit the selection editor's system prompt, reset that prompt to its safe
+default, and run a dedicated test request.
+
 Notes:
 
+- **Cancel and undo.** The voice keyboard exposes Cancel while recording, transcribing, or waiting for AI. After an insertion or AI edit, Undo is offered briefly and only runs if the inserted text is still unchanged.
 - **Failures never lose your words.** If the server is unreachable, the key is rejected, or the request times out, the raw transcription is inserted anyway and the keyboard's status line says what went wrong.
 - **Small models disappoint.** Anything under ~3B parameters tends to ignore the instruction and paraphrase or answer your text instead of cleaning it up.
 - **Privacy.** Text dictated with the second mic leaves the device. Audio never does. Point it at a local server to keep everything on your own network.

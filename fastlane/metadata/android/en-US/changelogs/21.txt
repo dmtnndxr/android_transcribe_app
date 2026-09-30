@@ -1,0 +1,5 @@
+- edit selected text with spoken AI instructions
+- configure a separate model and system prompt for selected-text editing
+- cancel recording, transcription, or AI processing from the voice keyboard
+- undo recent dictation and AI replacements safely
+- choose punctuation keys for quick corrections on the voice keyboard

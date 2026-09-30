@@ -49,6 +49,28 @@ public final class PostProcessor {
         }, "post-process").start();
     }
 
+    /** Applies a spoken command to a selection without using the cleanup template. */
+    public static void editSelectionAsync(Context ctx, String instruction,
+                                          String selectedText, Callback cb) {
+        final String baseUrl = PostProcessPrefs.getBaseUrl(ctx);
+        final String apiKey = PostProcessPrefs.getApiKey(ctx);
+        final String model = SelectionEditPrefs.getModel(ctx);
+        final String systemPrompt = SelectionEditPrefs.getSystemPrompt(ctx);
+
+        new Thread(() -> {
+            try {
+                cb.onSuccess(PostProcessClient.editSelection(
+                        baseUrl, apiKey, model, systemPrompt, instruction, selectedText));
+            } catch (PostProcessClient.PostProcessException e) {
+                Log.w(TAG, "Selection edit failed", e);
+                cb.onFailure(e.getMessage());
+            } catch (Throwable t) {
+                Log.e(TAG, "Unexpected selection-edit error", t);
+                cb.onFailure(t.getClass().getSimpleName());
+            }
+        }, "selection-edit").start();
+    }
+
     /** Blocking convenience overload that reads the current settings. */
     public static String process(Context ctx, String transcript)
             throws PostProcessClient.PostProcessException {

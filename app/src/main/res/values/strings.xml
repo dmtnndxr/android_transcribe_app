@@ -8,6 +8,12 @@
     <string name="section_ime">Alternative: Voice keyboard</string>
     <string name="desc_ime">Prefer a dedicated keyboard? Enable the Offline Voice Input keyboard, then switch to it from your keyboard switcher when you want voice input as its own keyboard.</string>
     <string name="btn_ime_settings">Open Keyboard Settings</string>
+    <string name="setting_punctuation_keys">Editing keys</string>
+    <string name="setting_punctuation_keys_desc">Choose the punctuation keys shown on the voice keyboard for quick manual corrections. Space and Backspace are always available.</string>
+    <string name="setting_punctuation_keys_shown">Shown: %1$s</string>
+    <string name="setting_punctuation_keys_none">None</string>
+    <string name="setting_punctuation_keys_save_error">Couldn\'t save editing keys.</string>
+    <string name="ime_insert_symbol">Insert %1$s</string>
     
     <string name="section_subs">Live Subtitles</string>
     <string name="desc_subs">Display subtitles for any audio playing on your device. After starting, select \'Share entire screen\' for best results.</string>
@@ -116,6 +122,31 @@
     <string name="desc_post_process">Adds a second microphone to the voice keyboard that runs your transcription through an AI model before inserting it — to fix grammar, reformat, translate, or anything else you write a prompt for. Off by default; the normal microphone always stays fully offline.</string>
     <string name="btn_post_process">Set up AI post-processing</string>
 
+    <string name="selection_title">Selected-text editing</string>
+    <string name="selection_main_desc">Configure the magic wand that applies a spoken instruction to selected text. It shares the AI server and API key, and uses the post-processing model unless you override it.</string>
+    <string name="selection_open_settings">Configure selected-text editing</string>
+    <string name="selection_connection_section">Shared AI connection</string>
+    <string name="selection_connection_desc">The server URL and API key are shared with AI post-processing and can be changed there.</string>
+    <string name="selection_connection_ready">The shared server connection is configured.</string>
+    <string name="selection_connection_disabled">AI post-processing is disabled. Enable it to show the wand on the voice keyboard.</string>
+    <string name="selection_connection_missing">The shared server URL is not configured yet.</string>
+    <string name="selection_open_post_process">Open AI post-processing settings</string>
+    <string name="selection_model_section">Model</string>
+    <string name="selection_model_inherited">Currently inherited: %1$s</string>
+    <string name="selection_model_missing">No shared model is configured yet.</string>
+    <string name="selection_model_override">Model override (optional)</string>
+    <string name="selection_model_desc">Leave blank to follow the model selected under AI post-processing. Enter a model name here only when edits should use a different model.</string>
+    <string name="selection_use_shared_model">Use shared model</string>
+    <string name="selection_model_reset">Now using the shared post-processing model</string>
+    <string name="selection_prompt_section">System prompt</string>
+    <string name="selection_prompt_desc">This permanent instruction defines how the model edits text. Your spoken command and the selected text are sent separately.</string>
+    <string name="selection_system_prompt">System prompt</string>
+    <string name="selection_prompt_reset">System prompt reset to default</string>
+    <string name="selection_test_desc">Tests the effective model and system prompt with a sample selection and editing instruction.</string>
+    <string name="selection_test">Test selected-text editing</string>
+    <string name="selection_test_incomplete">Configure the shared server and model first.</string>
+    <string name="selection_test_ok">Works.\n\nInstruction:\n%1$s\n\nSelected text:\n%2$s\n\nReplacement:\n%3$s</string>
+
     <string name="ime_stop_label">Stop</string>
     <string name="ime_ai_mic_label">Dictate + AI</string>
     <string name="ime_ai_mic_desc">Start dictation with AI post-processing</string>
@@ -124,10 +155,29 @@
     <string name="ime_ai_working_hint">Sending to the AI model</string>
     <string name="ime_ai_failed">AI post-processing failed (%1$s) — inserted as heard</string>
     <string name="ime_ai_not_configured">AI post-processing isn\'t set up — inserted as heard</string>
+    <string name="ime_cancel">Cancel</string>
+    <string name="ime_undo">Undo</string>
+    <string name="ime_canceled">Canceled</string>
+    <string name="ime_canceling">Canceling…</string>
+    <string name="ime_text_inserted">Text inserted</string>
+    <string name="ime_change_applied">Text changed</string>
+    <string name="ime_undo_done">Change undone</string>
+    <string name="ime_undo_unavailable">Can\'t undo because the text changed</string>
+    <string name="ime_edit_selection_label">Edit</string>
+    <string name="ime_edit_selection_desc">Edit selected text with a spoken instruction</string>
+    <string name="ime_edit_not_configured">Set up AI post-processing before editing selected text</string>
+    <string name="ime_edit_select_first">Select some text first</string>
+    <string name="ime_edit_password">Selected-text editing isn\'t available in secure fields</string>
+    <string name="ime_edit_listening">Listening for an edit…</string>
+    <string name="ime_edit_working">Editing selected text…</string>
+    <string name="ime_edit_working_hint">Keep the selection unchanged</string>
+    <string name="ime_edit_failed">Couldn\'t edit the text: %1$s</string>
+    <string name="ime_edit_selection_changed">Selection changed — text wasn\'t replaced</string>
+    <string name="ime_edit_no_change">The model made no changes</string>
 
     <string name="pp_title">AI post-processing</string>
     <string name="pp_enable">Enable AI post-processing</string>
-    <string name="pp_enable_desc">Shows the second microphone on the voice keyboard. The normal microphone is unaffected and never sends anything anywhere.</string>
+    <string name="pp_enable_desc">Shows AI dictation and selected-text editing on the voice keyboard. The normal microphone is unaffected and never sends anything anywhere.</string>
     <string name="pp_privacy_warning">Whatever you dictate with the second microphone leaves your device and is sent to the server you configure below. Use a local server if you want to keep everything on your own network.</string>
 
     <string name="pp_connection_section">Server</string>
