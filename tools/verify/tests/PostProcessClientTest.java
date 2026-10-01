@@ -193,6 +193,30 @@ class PostProcessClientTest {
         }
 
         @Test
+        @DisplayName("selection edit keeps the selection's own edge whitespace")
+        void selectionEditEdgeWhitespace() {
+            assertAll(
+                    () -> assertEquals("Shorter.\n",
+                            PostProcessClient.keepEdgeWhitespace("A long paragraph.\n", "Shorter.")),
+                    () -> assertEquals("  Shorter. ",
+                            PostProcessClient.keepEdgeWhitespace("  Long one. ", "\nShorter.\n")),
+                    () -> assertEquals("Shorter.",
+                            PostProcessClient.keepEdgeWhitespace("Long one.", "Shorter.")));
+        }
+
+        @Test
+        @DisplayName("selection edit keeps quotes that belong to a quoted selection")
+        void selectionEditQuotes() throws Exception {
+            assertAll(
+                    () -> assertTrue(PostProcessClient.isQuoted("\"Some quote\"\n")),
+                    () -> assertTrue(PostProcessClient.isQuoted("“Some quote”")),
+                    () -> assertFalse(PostProcessClient.isQuoted("He said \"hi\"")),
+                    () -> assertEquals("\"Shorter quote\"", PostProcessClient.extractContent(
+                            "{\"choices\":[{\"message\":{\"content\":\"\\\"Shorter quote\\\"\"}}]}",
+                            false)));
+        }
+
+        @Test
         @DisplayName("selection edit accepts a custom system prompt")
         void selectionEditCustomPrompt() {
             JSONObject root = new JSONObject(new String(

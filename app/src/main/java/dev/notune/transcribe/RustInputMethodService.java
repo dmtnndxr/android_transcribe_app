@@ -106,6 +106,10 @@ public class RustInputMethodService extends InputMethodService {
     // non-null no-op connection when nothing is focused, so commitText would be
     // silently dropped.
     private boolean inputActive = false;
+    // Whether the editor has a non-empty selection, as reported by the
+    // framework in onStartInput/onUpdateSelection. Kept here so the wand's
+    // state never needs a blocking round-trip to the editor.
+    private boolean selectionNonEmpty = false;
     // Whether the keyboard window is currently on screen. Some frameworks
     // (notably OEM builds) call onWindowShown again for events that don't
     // follow an onWindowHidden, e.g. tapping the text area to move the
@@ -292,7 +296,7 @@ public class RustInputMethodService extends InputMethodService {
             tintRecordButton(false);
             tintAiMic(false);
             updateAiMicVisibility();
-            updateEditSelectionEnabled();
+            applyMicEnabledState();
             updateUiState();
             return view;
         } catch (Exception e) {
@@ -380,6 +384,9 @@ public class RustInputMethodService extends InputMethodService {
         editorGeneration++;
         clearUndo();
         inputActive = true;
+        selectionNonEmpty = attribute != null
+                && attribute.initialSelStart >= 0
+                && attribute.initialSelStart != attribute.initialSelEnd;
     }
 
     @Override
@@ -401,7 +408,7 @@ public class RustInputMethodService extends InputMethodService {
         // A field is focused and the input connection is live again — commit any
         // text that finished transcribing while nothing was focused.
         flushPendingText();
-        updateEditSelectionEnabled();
+        applyMicEnabledState();
     }
 
     @Override
@@ -410,6 +417,7 @@ public class RustInputMethodService extends InputMethodService {
         editorGeneration++;
         clearUndo();
         inputActive = false;
+        selectionNonEmpty = false;
     }
 
     @Override
@@ -418,7 +426,11 @@ public class RustInputMethodService extends InputMethodService {
                                   int candidatesStart, int candidatesEnd) {
         super.onUpdateSelection(oldSelStart, oldSelEnd, newSelStart, newSelEnd,
                 candidatesStart, candidatesEnd);
-        updateEditSelectionEnabled();
+        boolean nonEmpty = newSelStart >= 0 && newSelStart != newSelEnd;
+        if (nonEmpty != selectionNonEmpty) {
+            selectionNonEmpty = nonEmpty;
+            applyMicEnabledState();
+        }
     }
 
     /**
@@ -567,7 +579,7 @@ public class RustInputMethodService extends InputMethodService {
         }
         if (editContainer != null && editSelectionButton != null) {
             boolean editTappable = !busy;
-            boolean selectionReady = !isSecureEditor() && hasSelection();
+            boolean selectionReady = inputActive && selectionNonEmpty && !isSecureEditor();
             editSelectionButton.setEnabled(editTappable);
             editContainer.setAlpha(selectionReady && editTappable ? 1.0f : 0.45f);
         }
@@ -1113,11 +1125,6 @@ public class RustInputMethodService extends InputMethodService {
         return extracted.text.subSequence(localStart, localEnd).toString();
     }
 
-    private boolean hasSelection() {
-        InputConnection ic = getCurrentInputConnection();
-        return captureSelection(ic, true) != null;
-    }
-
     private boolean isSecureEditor() {
         EditorInfo info = getCurrentInputEditorInfo();
         if (info == null) return false;
@@ -1130,14 +1137,6 @@ public class RustInputMethodService extends InputMethodService {
                 && (variation == InputType.TYPE_TEXT_VARIATION_PASSWORD
                 || variation == InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD
                 || variation == InputType.TYPE_TEXT_VARIATION_WEB_PASSWORD);
-    }
-
-    private void updateEditSelectionEnabled() {
-        if (editSelectionButton == null || editContainer == null) return;
-        boolean busy = isRecording || transcriptionPending || postProcessRunning;
-        boolean selectionReady = !isSecureEditor() && hasSelection();
-        editSelectionButton.setEnabled(!busy);
-        editContainer.setAlpha(!busy && selectionReady ? 1.0f : 0.45f);
     }
 
     private static final class SelectionSnapshot {

@@ -144,19 +144,52 @@ public final class PostProcessClient {
             throw new PostProcessException("invalid server URL");
         }
 
-        boolean skipReasoning = isOpenRouter(url);
-        if (skipReasoning) {
+        // Quotes around a selection are the user's text, so they must survive;
+        // only unwrap quotes the model added around an unquoted selection.
+        boolean unwrapQuotes = !isQuoted(selectedText);
+        String reply = null;
+        if (isOpenRouter(url)) {
             try {
-                return send(url, apiKey,
+                reply = send(url, apiKey,
                         buildEditBody(model, systemPrompt, instruction, selectedText, true),
-                        CONNECT_TIMEOUT_MS, READ_TIMEOUT_MS, true);
+                        CONNECT_TIMEOUT_MS, READ_TIMEOUT_MS, true, unwrapQuotes);
             } catch (ReasoningRequiredException e) {
                 // Retry without the optional OpenRouter reasoning override.
             }
         }
-        return send(url, apiKey,
-                buildEditBody(model, systemPrompt, instruction, selectedText, false),
-                CONNECT_TIMEOUT_MS, READ_TIMEOUT_MS, false);
+        if (reply == null) {
+            reply = send(url, apiKey,
+                    buildEditBody(model, systemPrompt, instruction, selectedText, false),
+                    CONNECT_TIMEOUT_MS, READ_TIMEOUT_MS, false, unwrapQuotes);
+        }
+        return keepEdgeWhitespace(selectedText, reply);
+    }
+
+    /**
+     * The reply comes back trimmed, but the whitespace around a selection
+     * (the newline ending a selected paragraph, say) is not the model's to
+     * remove. Put the selection's own leading and trailing whitespace back.
+     */
+    static String keepEdgeWhitespace(String selectedText, String reply) {
+        int start = 0;
+        while (start < selectedText.length()
+                && Character.isWhitespace(selectedText.charAt(start))) {
+            start++;
+        }
+        if (start == selectedText.length()) return reply;
+        int end = selectedText.length();
+        while (Character.isWhitespace(selectedText.charAt(end - 1))) {
+            end--;
+        }
+        return selectedText.substring(0, start) + reply.trim()
+                + selectedText.substring(end);
+    }
+
+    static boolean isQuoted(String text) {
+        String t = text.trim();
+        return t.length() >= 2
+                && ((t.charAt(0) == '"' && t.charAt(t.length() - 1) == '"')
+                || (t.charAt(0) == '“' && t.charAt(t.length() - 1) == '”'));
     }
 
     /**
@@ -202,18 +235,18 @@ public final class PostProcessClient {
             try {
                 return send(url, apiKey,
                         buildBody(model, promptTemplate, transcript, true),
-                        connectTimeoutMs, readTimeoutMs, true);
+                        connectTimeoutMs, readTimeoutMs, true, true);
             } catch (ReasoningRequiredException e) {
                 // Fall through to a plain request.
             }
         }
         return send(url, apiKey, buildBody(model, promptTemplate, transcript, false),
-                connectTimeoutMs, readTimeoutMs, false);
+                connectTimeoutMs, readTimeoutMs, false, true);
     }
 
     private static String send(URL url, String apiKey, byte[] body,
                                int connectTimeoutMs, int readTimeoutMs,
-                               boolean reasoningSkipped)
+                               boolean reasoningSkipped, boolean unwrapQuotes)
             throws PostProcessException {
         HttpURLConnection conn = null;
         try {
@@ -252,7 +285,7 @@ public final class PostProcessClient {
                 throw new PostProcessException(describeHttpError(status, error));
             }
 
-            String text = extractContent(readAll(conn.getInputStream()));
+            String text = extractContent(readAll(conn.getInputStream()), unwrapQuotes);
             if (text.isEmpty()) {
                 throw new PostProcessException("the model returned an empty response");
             }
@@ -406,6 +439,11 @@ public final class PostProcessClient {
      * use instead.
      */
     static String extractContent(String json) throws PostProcessException {
+        return extractContent(json, true);
+    }
+
+    static String extractContent(String json, boolean unwrapQuotes)
+            throws PostProcessException {
         try {
             JSONObject root = new JSONObject(json);
 
@@ -449,7 +487,7 @@ public final class PostProcessClient {
                 content = raw.toString();
             }
 
-            return cleanup(content);
+            return cleanup(content, unwrapQuotes);
         } catch (JSONException e) {
             throw new PostProcessException("couldn't read the server's response");
         }
@@ -464,8 +502,13 @@ public final class PostProcessClient {
      * quoted speech is left alone.
      */
     static String cleanup(String content) {
+        return cleanup(content, true);
+    }
+
+    static String cleanup(String content, boolean unwrapQuotes) {
         Matcher m = THINK_BLOCK.matcher(content);
         String out = m.replaceAll("").trim();
+        if (!unwrapQuotes) return out;
         out = unwrap(out, '"', '"');
         out = unwrap(out, '“', '”'); // “ ”
         return out;
