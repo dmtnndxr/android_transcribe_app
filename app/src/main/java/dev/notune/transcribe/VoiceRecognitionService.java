@@ -142,7 +142,15 @@ public class VoiceRecognitionService extends RecognitionService {
             hypotheses.add(text);
             Bundle bundle = new Bundle();
             bundle.putStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION, hypotheses);
-            try { cb.results(bundle); } catch (RemoteException ignored) {}
+            try {
+                cb.results(bundle);
+            } catch (RemoteException e) {
+                // The app that asked for speech is gone (closed or minimized
+                // while we transcribed). Don't drop what the user said.
+                if (text != null && !text.trim().isEmpty()) {
+                    TranscriptRescue.rescue(this, text.trim(), false);
+                }
+            }
             mCallback = null;
         });
     }

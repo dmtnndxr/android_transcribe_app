@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Outline-only circle for a round keyboard button that can't act yet (the
+     edit wand with no text selected). White so it can be recolored via
+     backgroundTint like bg_ime_mini_mic. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="oval">
+    <!-- An explicit transparent fill: without one, backgroundTint paints the
+         whole oval, not just the stroke. -->
+    <solid android:color="@android:color/transparent" />
+    <stroke android:width="1.5dp" android:color="@android:color/white" />
+</shape>

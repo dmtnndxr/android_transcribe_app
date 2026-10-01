@@ -64,6 +64,8 @@ public class RustInputMethodService extends InputMethodService {
     private TextView editLabel;
     private Button cancelAction;
     private Button undoAction;
+    private View pendingBar;
+    private TextView pendingTextView;
     /**
      * Whether the recording in flight (or about to start) should be
      * post-processed. Latched when the mic is tapped so a settings change
@@ -117,12 +119,20 @@ public class RustInputMethodService extends InputMethodService {
     // a genuine hidden -> shown transition, or a cursor tap starts a
     // recording the user never asked for.
     private boolean windowVisible = false;
-    // Transcribed text waiting to be committed because no editor was focused
-    // when transcription finished. This happens on long transcribes where the
-    // target field (e.g. a web field in Firefox/Gemini) drops focus while we
-    // process audio. Flushed from onStartInputView once a field is focused
-    // again so the text is never lost.
+    // The field a recording was started in (see targetKey). Text is only
+    // typed into that field; anywhere else it goes to the clipboard instead.
+    private String recordingTargetKey = null;
+    // Transcribed text that finished while its field wasn't focused (and,
+    // if enabled, also went to the clipboard). The keyboard offers it in a
+    // bar until it is inserted or dismissed. If the same field comes back
+    // soon it is typed in directly, which covers web fields (Firefox,
+    // Gemini) that drop focus by themselves while we process audio.
     private String pendingCommitText = null;
+    private String pendingTargetKey = null;
+    private long pendingAutoInsertUntil = 0;
+    // Long enough for a field that briefly lost focus, short enough that the
+    // text can't turn up by itself unexpectedly much later.
+    private static final long PENDING_AUTO_INSERT_MS = 60_000;
 
     @Override
     public void onCreate() {
@@ -180,6 +190,11 @@ public class RustInputMethodService extends InputMethodService {
             editLabel = view.findViewById(R.id.ime_edit_label);
             cancelAction = view.findViewById(R.id.ime_cancel_action);
             undoAction = view.findViewById(R.id.ime_undo_action);
+            pendingBar = view.findViewById(R.id.ime_pending_bar);
+            pendingTextView = view.findViewById(R.id.ime_pending_text);
+            view.findViewById(R.id.ime_pending_insert).setOnClickListener(v -> insertPendingText());
+            view.findViewById(R.id.ime_pending_dismiss).setOnClickListener(v -> clearPendingText());
+            updatePendingBar();
 
             updatePunctuationKeys();
 
@@ -336,7 +351,7 @@ public class RustInputMethodService extends InputMethodService {
                 editSelectionNext = false;
                 selectionToEdit = null;
                 clearUndo();
-                startRecording();
+                startCapture();
                 updateRecordButtonUI(true);
             }
         }
@@ -368,7 +383,8 @@ public class RustInputMethodService extends InputMethodService {
                 updateRecordButtonUI(false);
             } else {
                 // Default: keep recording in the background. The transcription
-                // is committed on return (or held in pendingCommitText).
+                // is committed if its field is back by then, else it goes to
+                // the clipboard (see deliverText).
                 return;
             }
         }
@@ -470,7 +486,7 @@ public class RustInputMethodService extends InputMethodService {
             audioPauser.request(this);
             pauseAudioActive = true;
         }
-        startRecording();
+        startCapture();
         updateRecordButtonUI(true);
     }
 
@@ -510,8 +526,30 @@ public class RustInputMethodService extends InputMethodService {
             audioPauser.request(this);
             pauseAudioActive = true;
         }
-        startRecording();
+        startCapture();
         updateRecordButtonUI(true);
+    }
+
+    /** Remembers which field the text is for, then starts the native capture. */
+    private void startCapture() {
+        recordingTargetKey = inputActive ? targetKey(getCurrentInputEditorInfo()) : null;
+        startRecording();
+    }
+
+    /**
+     * Identifies a text field across focus changes: the app plus the field's
+     * view id. Fields inside one WebView share an id, so there it narrows to
+     * the app, which is still enough to keep text out of other apps.
+     */
+    private static String targetKey(EditorInfo info) {
+        if (info == null || info.packageName == null) return null;
+        return info.packageName + "#" + info.fieldId;
+    }
+
+    /** True if text recorded for {@code key} may be typed into the current field. */
+    private boolean isCurrentTarget(String key) {
+        // Unknown origin (no field when recording began): any field will do.
+        return key == null || key.equals(targetKey(getCurrentInputEditorInfo()));
     }
 
     private void updateRecordButtonUI(boolean recording) {
@@ -537,7 +575,6 @@ public class RustInputMethodService extends InputMethodService {
             statusView.setText("Processing...");
             hintView.setText("Tap to Record");
             if (aiLabel != null) aiLabel.setText(R.string.ime_ai_mic_label);
-            if (editLabel != null) editLabel.setText(R.string.ime_edit_selection_label);
             if (micLevelView != null) micLevelView.setLevel(0f);
         }
         applyMicEnabledState();
@@ -578,10 +615,12 @@ public class RustInputMethodService extends InputMethodService {
             aiContainer.setAlpha(aiEnabled ? 1.0f : 0.5f);
         }
         if (editContainer != null && editSelectionButton != null) {
-            boolean editTappable = !busy;
-            boolean selectionReady = inputActive && selectionNonEmpty && !isSecureEditor();
-            editSelectionButton.setEnabled(editTappable);
-            editContainer.setAlpha(selectionReady && editTappable ? 1.0f : 0.45f);
+            // Stays tappable without a selection so a tap can explain why
+            // nothing happens (onEditSelectionTap); the look says it's idle.
+            editSelectionButton.setEnabled(!busy);
+            boolean recordingEdit = isRecording && editSelectionNext;
+            boolean ready = !busy && inputActive && selectionNonEmpty && !isSecureEditor();
+            styleEditButton(recordingEdit, ready);
         }
         if (cancelAction != null) {
             boolean cancelable = (isRecording || transcriptionPending || postProcessRunning)
@@ -626,16 +665,43 @@ public class RustInputMethodService extends InputMethodService {
     }
 
     private void tintEditButton(boolean recording) {
-        if (editSelectionButton == null) return;
-        int circleAttr = recording
-                ? com.google.android.material.R.attr.colorSecondary
-                : com.google.android.material.R.attr.colorSecondaryContainer;
-        int iconAttr = recording
-                ? com.google.android.material.R.attr.colorOnSecondary
-                : com.google.android.material.R.attr.colorOnSecondaryContainer;
-        editSelectionButton.setBackgroundTintList(ColorStateList.valueOf(
-                MaterialColors.getColor(editSelectionButton, circleAttr)));
-        editSelectionButton.setColorFilter(MaterialColors.getColor(editSelectionButton, iconAttr));
+        // The wand's look depends on the selection as well, so it is drawn in
+        // one place: applyMicEnabledState -> styleEditButton.
+        applyMicEnabledState();
+    }
+
+    /**
+     * Three looks so it's clear at a glance whether the wand will act:
+     * recording (solid, "Stop"), ready (filled, "Edit"), and idle — no
+     * selection or the engine is busy — as a faint outline with a hint.
+     */
+    private void styleEditButton(boolean recording, boolean ready) {
+        View b = editSelectionButton;
+        int circle;
+        int icon;
+        if (recording) {
+            circle = MaterialColors.getColor(b, com.google.android.material.R.attr.colorSecondary);
+            icon = MaterialColors.getColor(b, com.google.android.material.R.attr.colorOnSecondary);
+        } else if (ready) {
+            circle = MaterialColors.getColor(b, com.google.android.material.R.attr.colorSecondaryContainer);
+            icon = MaterialColors.getColor(b, com.google.android.material.R.attr.colorOnSecondaryContainer);
+        } else {
+            circle = MaterialColors.getColor(b, com.google.android.material.R.attr.colorOutline);
+            // Material's disabled content: on-surface at 38%.
+            icon = MaterialColors.compositeARGBWithAlpha(
+                    MaterialColors.getColor(b, com.google.android.material.R.attr.colorOnSurface), 97);
+        }
+        b.setBackgroundResource(recording || ready
+                ? R.drawable.bg_ime_mini_mic : R.drawable.bg_ime_mini_outline);
+        b.setBackgroundTintList(ColorStateList.valueOf(circle));
+        editSelectionButton.setColorFilter(icon);
+        if (editLabel != null) {
+            editLabel.setText(recording ? R.string.ime_stop_label
+                    : ready ? R.string.ime_edit_selection_label : R.string.ime_edit_select_hint);
+            editLabel.setTextColor(MaterialColors.getColor(editLabel, ready || recording
+                    ? com.google.android.material.R.attr.colorOnSurface
+                    : com.google.android.material.R.attr.colorOnSurfaceVariant));
+        }
     }
 
     @Override
@@ -887,15 +953,17 @@ public class RustInputMethodService extends InputMethodService {
     private void deliverText(String text, String statusMessage) {
         String committed = text + " ";
         InputConnection ic = getCurrentInputConnection();
-        if (inputActive && ic != null) {
+        if (inputActive && ic != null && isCurrentTarget(recordingTargetKey)) {
             commitTranscribedText(ic, committed);
         } else {
-            // No editor is focused right now (common on long transcribes where
-            // a web field in Firefox/Gemini dropped focus while we processed
-            // audio, and more likely still once an LLM round-trip is added).
-            // Committing now would be silently dropped, so defer the text until
-            // a field is focused again instead of losing it.
-            pendingCommitText = committed;
+            // The field the user dictated into is gone (app minimized, focus
+            // moved elsewhere). Typing into whatever is focused now could put
+            // the text in the wrong place, so keep it for the user instead.
+            // The toast already said where the text went; the status line
+            // would only go stale once the user has pasted it.
+            TranscriptRescue.rescue(this, text, true);
+            keepPendingText(committed);
+            if (statusMessage == null) statusMessage = "Tap to Record";
         }
         if (pauseAudioActive) {
             audioPauser.abandon(this);
@@ -914,13 +982,10 @@ public class RustInputMethodService extends InputMethodService {
 
     // Commits transcribed text into the active input connection, optionally
     // selecting it afterwards (select_transcription setting).
+    // No Undo here: the user sees what was typed and can delete it. Undo is
+    // kept for voice edits, which overwrite the user's own text.
     private void commitTranscribedText(InputConnection ic, String committed) {
-        SelectionSnapshot before = captureSelection(ic, false);
         ic.commitText(committed, 1);
-
-        if (before != null) {
-            offerUndo(before.text, committed, before.start, before.editorGeneration);
-        }
 
         if (!pendingSwitchBack && new File(getFilesDir(), "select_transcription").exists()) {
             android.view.inputmethod.ExtractedText et = ic.getExtractedText(
@@ -941,10 +1006,50 @@ public class RustInputMethodService extends InputMethodService {
     private void flushPendingText() {
         if (pendingCommitText == null) return;
         InputConnection ic = getCurrentInputConnection();
-        if (ic != null) {
+        if (ic != null && isCurrentTarget(pendingTargetKey)
+                && android.os.SystemClock.uptimeMillis() <= pendingAutoInsertUntil) {
             commitTranscribedText(ic, pendingCommitText);
-            pendingCommitText = null;
+            clearPendingText();
+            return;
         }
+        // Another field, or too late to do it unasked: the bar offers it.
+        updatePendingBar();
+    }
+
+    private void keepPendingText(String text) {
+        pendingCommitText = text;
+        pendingTargetKey = recordingTargetKey;
+        pendingAutoInsertUntil = android.os.SystemClock.uptimeMillis() + PENDING_AUTO_INSERT_MS;
+        updatePendingBar();
+    }
+
+    /** "Insert" on the bar: the user picked this field, so any field will do. */
+    private void insertPendingText() {
+        InputConnection ic = getCurrentInputConnection();
+        if (pendingCommitText == null || !inputActive || ic == null) return;
+        commitTranscribedText(ic, pendingCommitText);
+        clearPendingText();
+        showStatus(R.string.ime_text_inserted);
+    }
+
+    private void clearPendingText() {
+        pendingCommitText = null;
+        pendingTargetKey = null;
+        updatePendingBar();
+    }
+
+    private void updatePendingBar() {
+        if (pendingBar == null) return;
+        // With clipboard copying on, the user already has the text and was
+        // told so; the bar would only linger after they paste it themselves.
+        if (pendingCommitText == null || TranscriptRescue.isClipboardEnabled(this)) {
+            pendingBar.setVisibility(View.GONE);
+            return;
+        }
+        String preview = pendingCommitText.trim().replace('\n', ' ');
+        if (preview.length() > 80) preview = preview.substring(0, 80) + "…";
+        pendingTextView.setText(getString(R.string.ime_pending_text, preview));
+        pendingBar.setVisibility(View.VISIBLE);
     }
 
     /** Cancels capture immediately, or makes an already-running result a no-op. */
@@ -1018,7 +1123,10 @@ public class RustInputMethodService extends InputMethodService {
                 || current.start != target.start
                 || current.end != target.end
                 || !current.text.equals(target.text)) {
-            finishOperation(getString(R.string.ime_edit_selection_changed));
+            // The edit is done but has nowhere safe to go; keep it.
+            TranscriptRescue.rescue(this, replacement, true);
+            keepPendingText(replacement);
+            finishOperation("Tap to Record");
             return;
         }
         if (target.text.equals(replacement)) {

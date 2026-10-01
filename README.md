@@ -100,7 +100,7 @@ default, and run a dedicated test request.
 
 Notes:
 
-- **Cancel and undo.** The voice keyboard exposes Cancel while recording, transcribing, or waiting for AI. After an insertion or AI edit, Undo is offered briefly and only runs if the inserted text is still unchanged.
+- **Cancel and undo.** The voice keyboard exposes Cancel while recording, transcribing, or waiting for AI. After a voice edit replaces selected text, Undo is offered briefly and only runs if the replacement is still unchanged.
 - **Failures never lose your words.** If the server is unreachable, the key is rejected, or the request times out, the raw transcription is inserted anyway and the keyboard's status line says what went wrong.
 - **Small models disappoint.** Anything under ~3B parameters tends to ignore the instruction and paraphrase or answer your text instead of cleaning it up.
 - **Privacy.** Text dictated with the second mic leaves the device. Audio never does. Point it at a local server to keep everything on your own network.

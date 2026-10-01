@@ -7,6 +7,51 @@
     android:background="?attr/colorSurface"
     android:padding="12dp">
 
+    <!-- Text that finished while its field was gone, offered for insertion -->
+    <LinearLayout
+        android:id="@+id/ime_pending_bar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_marginBottom="8dp"
+        android:paddingStart="12dp"
+        android:background="?attr/colorSecondaryContainer"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/ime_pending_text"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:maxLines="2"
+            android:ellipsize="end"
+            android:textColor="?attr/colorOnSecondaryContainer"
+            android:textAppearance="?attr/textAppearanceBodyMedium"/>
+
+        <Button
+            android:id="@+id/ime_pending_insert"
+            style="?android:attr/borderlessButtonStyle"
+            android:layout_width="wrap_content"
+            android:layout_height="40dp"
+            android:minWidth="0dp"
+            android:paddingStart="10dp"
+            android:paddingEnd="10dp"
+            android:text="@string/ime_pending_insert"
+            android:textAllCaps="false"
+            android:textColor="?attr/colorPrimary"/>
+
+        <ImageView
+            android:id="@+id/ime_pending_dismiss"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:padding="10dp"
+            android:src="@drawable/ic_close"
+            android:contentDescription="@string/ime_pending_dismiss"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:tint="?attr/colorOnSecondaryContainer"/>
+    </LinearLayout>
+
     <!-- Status row -->
     <LinearLayout
         android:layout_width="match_parent"
@@ -109,7 +154,7 @@
                 android:src="@drawable/ic_magic_wand"
                 android:scaleType="fitCenter"
                 android:background="@drawable/bg_ime_mini_mic"
-                android:foreground="?attr/selectableItemBackgroundBorderless"
+                android:foreground="@drawable/ripple_oval"
                 android:clickable="true"
                 android:focusable="true"
                 android:contentDescription="@string/ime_edit_selection_desc"/>
@@ -145,7 +190,7 @@
                 android:src="@drawable/ic_mic_ai"
                 android:scaleType="fitCenter"
                 android:background="@drawable/bg_ime_mini_mic"
-                android:foreground="?attr/selectableItemBackgroundBorderless"
+                android:foreground="@drawable/ripple_oval"
                 android:clickable="true"
                 android:focusable="true"
                 android:contentDescription="@string/ime_ai_mic_desc"/>
