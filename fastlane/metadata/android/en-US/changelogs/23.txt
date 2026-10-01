@@ -1,0 +1,3 @@
+- target Android 16 (API 36)
+- voice edits keep the line breaks and quotes around the selected text
+- the edit button stays usable while recording, and moving the cursor no longer slows typing
