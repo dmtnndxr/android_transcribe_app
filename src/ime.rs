@@ -1,4 +1,4 @@
-use jni::objects::{JClass, JObject};
+use jni::objects::{JClass, JObject, JString};
 use jni::JNIEnv;
 use once_cell::sync::Lazy;
 use std::sync::Mutex;
@@ -39,12 +39,19 @@ pub unsafe extern "system" fn Java_dev_notune_transcribe_RustInputMethodService_
 
 #[no_mangle]
 pub unsafe extern "system" fn Java_dev_notune_transcribe_RustInputMethodService_stopRecording(
-    env: JNIEnv,
+    mut env: JNIEnv,
     _class: JClass,
+    wav_path: JString,
 ) {
+    // Null when the history doesn't keep audio.
+    let path: Option<String> = if wav_path.is_null() {
+        None
+    } else {
+        env.get_string(&wav_path).ok().map(|s| s.into())
+    };
     let mut guard = IME_STATE.lock().unwrap();
     if let Some(state) = guard.as_mut() {
-        voice_session::stop_recording(env, state);
+        voice_session::stop_recording(env, state, path);
     }
 }
 

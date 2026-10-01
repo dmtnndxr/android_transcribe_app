@@ -215,4 +215,49 @@
 
     <string name="voice_help_title">Voice input setup</string>
     <string name="voice_help_body">How to use it\n• Open any app and tap the microphone on a supported keyboard/app. A small panel slides up, you speak, tap to stop, and the text is inserted. (Enable “Auto-stop after silence” in the settings to have it stop by itself.)\n\nWhich keyboards open the voice panel\n• Microsoft SwiftKey (not open source) and website voice search open the panel directly.\n• AnySoftKeyboard is the open-source way to get the panel: its mic key opens it as long as no voice keyboard is enabled on your system.\n\nOther open-source keyboards\n• HeliBoard, FlorisBoard, OpenBoard, Fossify Keyboard and Unexpected Keyboard don\'t open the panel: their mic key switches to the “Offline Voice Input” keyboard instead. Enable it once (see “Alternative: Voice keyboard”), speak there, and use its keyboard-switch key to go back. FUTO Keyboard ships its own voice input.\n• Gboard only uses Google\'s own voice typing and can\'t use this app at all.\n\nIf SwiftKey\'s own voice typing opens instead\n• Settings → Rich input → turn off “Multi-modal voice typing”.\n• Then tap the mic again and pick “Offline Voice Input”.\n\nIf Android asks which app to use\n• Choose “Offline Voice Input” and tap “Always”.\n\nIf another app always opens instead\n• Open Settings → Apps → that app → “Open by default” → Clear defaults, then try again.</string>
+
+    <!-- History -->
+    <string name="history_title">History</string>
+    <string name="history_section">History</string>
+    <string name="history_desc">Everything you dictated, with the recording, what was recognized and what AI made of it. Stored only on this phone.</string>
+    <string name="btn_history">Open history</string>
+    <string name="history_search">Search</string>
+    <string name="history_empty">Nothing here yet. Dictations from the voice keyboard will appear here.</string>
+    <string name="history_no_results">Nothing found</string>
+    <string name="history_off">History is off. Turn it on in settings (⚙).</string>
+    <string name="history_status_audio">Recordings are kept for %1$d days, text until you delete it.</string>
+    <string name="history_status_no_audio">Only text is kept, recordings are not saved.</string>
+    <string name="history_settings">History settings</string>
+    <string name="history_clear">Clear history</string>
+    <string name="history_clear_title">Clear history?</string>
+    <string name="history_clear_message">All saved texts and recordings will be deleted from this phone.</string>
+    <string name="history_setting_enabled">Keep history</string>
+    <string name="history_setting_audio">Keep recordings</string>
+    <string name="history_setting_audio_days">Keep recordings for</string>
+    <string name="history_days_forever">Always</string>
+    <string name="history_days_1">1 day</string>
+    <string name="history_status_forever">Text and recordings are kept until you delete them.</string>
+    <string name="history_days_7">7 days</string>
+    <string name="history_days_30">30 days</string>
+    <string name="history_storage">Recordings use %1$s</string>
+    <string name="history_play">Play</string>
+    <string name="history_stop">Stop</string>
+    <string name="history_copy">Copy</string>
+    <string name="history_share">Share</string>
+    <string name="history_delete">Delete</string>
+    <string name="history_copied">Copied</string>
+    <string name="history_play_failed">Can\'t play this recording</string>
+    <string name="history_source_dictation">Dictation</string>
+    <string name="history_source_ai">Dictation + AI</string>
+    <string name="history_source_edit">Voice edit</string>
+    <string name="history_source_other">Other keyboard</string>
+    <string name="history_outcome_clipboard">to clipboard</string>
+    <string name="history_outcome_kept">not inserted</string>
+    <string name="history_outcome_unchanged">no change</string>
+    <string name="history_outcome_failed">failed</string>
+    <string name="history_outcome_canceled">canceled</string>
+    <string name="history_outcome_pending">processing</string>
+    <string name="history_detail_raw">Recognized: %1$s</string>
+    <string name="history_detail_instruction">Instruction: %1$s</string>
+    <string name="history_detail_original">Before: %1$s</string>
 </resources>

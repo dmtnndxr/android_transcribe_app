@@ -138,17 +138,24 @@ public class VoiceRecognitionService extends RecognitionService {
         mainHandler.post(() -> {
             Callback cb = mCallback;
             if (cb == null) return;
+            String historyId = text == null || text.trim().isEmpty() ? null
+                    : HistoryStore.add(this, HistoryStore.SOURCE_OTHER_KEYBOARD, text.trim(), null, 0);
             ArrayList<String> hypotheses = new ArrayList<>();
             hypotheses.add(text);
             Bundle bundle = new Bundle();
             bundle.putStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION, hypotheses);
             try {
                 cb.results(bundle);
+                HistoryStore.finish(this, historyId, null, null, HistoryStore.OUTCOME_INSERTED, null);
             } catch (RemoteException e) {
                 // The app that asked for speech is gone (closed or minimized
                 // while we transcribed). Don't drop what the user said.
                 if (text != null && !text.trim().isEmpty()) {
                     TranscriptRescue.rescue(this, text.trim(), false);
+                    HistoryStore.finish(this, historyId, null, null,
+                            TranscriptRescue.isClipboardEnabled(this)
+                                    ? HistoryStore.OUTCOME_CLIPBOARD : HistoryStore.OUTCOME_FAILED,
+                            null);
                 }
             }
             mCallback = null;

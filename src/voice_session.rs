@@ -317,7 +317,10 @@ fn abandon_stream(state: &mut VoiceSessionState) {
     state.stream_tx.lock().unwrap().take();
 }
 
-pub fn stop_recording(mut env: JNIEnv, state: &mut VoiceSessionState) {
+/// Stops capture and transcribes. With `wav_path`, the recording is also
+/// saved there (for the history) before transcription starts, so the file is
+/// complete by the time `onTextTranscribed` fires.
+pub fn stop_recording(mut env: JNIEnv, state: &mut VoiceSessionState, wav_path: Option<String>) {
     // Drop the stream to stop recording; end the auto-stop monitor if running.
     state.session_active.store(false, Ordering::SeqCst);
     state.stream = None;
@@ -350,6 +353,12 @@ pub fn stop_recording(mut env: JNIEnv, state: &mut VoiceSessionState) {
             Err(_) => return,
         };
         let obj = target_ref.as_obj();
+
+        if let Some(path) = wav_path {
+            if let Err(e) = crate::audio::write_wav(&path, &buffer, 16_000) {
+                log::warn!("couldn't save recording to {}: {}", path, e);
+            }
+        }
 
         if let Some(worker) = worker {
             match worker.result.recv() {

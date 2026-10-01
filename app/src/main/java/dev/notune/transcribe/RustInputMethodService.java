@@ -122,6 +122,11 @@ public class RustInputMethodService extends InputMethodService {
     // The field a recording was started in (see targetKey). Text is only
     // typed into that field; anywhere else it goes to the clipboard instead.
     private String recordingTargetKey = null;
+    // History bookkeeping for the current dictation (see HistoryStore).
+    private long captureStartedAt = 0;
+    private long captureStoppedAt = 0;
+    private File captureAudio = null;
+    private String historyId = null;
     // Transcribed text that finished while its field wasn't focused (and,
     // if enabled, also went to the clipboard). The keyboard offers it in a
     // bar until it is inserted or dismissed. If the same field comes back
@@ -202,7 +207,7 @@ public class RustInputMethodService extends InputMethodService {
                 if (isRecording) {
                     pendingSwitchBack = true;
                     transcriptionPending = true;
-                    stopRecording();
+                    stopCapture();
                     updateRecordButtonUI(false);
                 } else {
                     switchToPreviousInputMethod();
@@ -370,7 +375,7 @@ public class RustInputMethodService extends InputMethodService {
                 } catch (Throwable t) {
                     Log.w(TAG, "cancelRecording failed, falling back to stopRecording", t);
                     try {
-                        stopRecording();
+                        stopRecording(null);
                         fellBackToTranscription = true;
                     } catch (Throwable ignored) { }
                 }
@@ -460,7 +465,7 @@ public class RustInputMethodService extends InputMethodService {
             // Stopping from a sibling button must not silently change the mode
             // chosen when capture began (especially selection editing).
             transcriptionPending = true;
-            stopRecording();
+            stopCapture();
             if (pauseAudioActive) {
                 audioPauser.abandon(this);
                 pauseAudioActive = false;
@@ -533,7 +538,24 @@ public class RustInputMethodService extends InputMethodService {
     /** Remembers which field the text is for, then starts the native capture. */
     private void startCapture() {
         recordingTargetKey = inputActive ? targetKey(getCurrentInputEditorInfo()) : null;
+        captureStartedAt = System.currentTimeMillis();
+        captureAudio = null;
         startRecording();
+    }
+
+    /** Stops capture for transcription, saving the audio if the history keeps it. */
+    private void stopCapture() {
+        captureStoppedAt = System.currentTimeMillis();
+        captureAudio = HistoryStore.newAudioFile(this);
+        stopRecording(captureAudio == null ? null : captureAudio.getAbsolutePath());
+    }
+
+    /** Drops the saved recording of a dictation that produced no entry. */
+    private void discardCaptureAudio() {
+        if (captureAudio != null) {
+            captureAudio.delete();
+            captureAudio = null;
+        }
     }
 
     /**
@@ -720,7 +742,8 @@ public class RustInputMethodService extends InputMethodService {
     private native void initNative(RustInputMethodService service);
     private native void cleanupNative();
     private native void startRecording();
-    private native void stopRecording();
+    /** @param wavPath where to save the recording for the history, or null. */
+    private native void stopRecording(String wavPath);
     private native void cancelRecording();
 
     // Called from Rust
@@ -815,6 +838,7 @@ public class RustInputMethodService extends InputMethodService {
                 discardNextTranscription = false;
                 cancelRequested = false;
                 selectionToEdit = null;
+                discardCaptureAudio();
                 pendingSwitchBack = false;
                 finishOperation(getString(R.string.ime_canceled));
                 return;
@@ -824,6 +848,7 @@ public class RustInputMethodService extends InputMethodService {
                 // Nothing recognized — don't insert a stray space, and don't
                 // spend an LLM round-trip on an empty string.
                 selectionToEdit = null;
+                discardCaptureAudio();
                 updateRecordButtonUI(false);
                 if (statusView != null) statusView.setText("Tap to Record");
                 if (pauseAudioActive) {
@@ -837,8 +862,16 @@ public class RustInputMethodService extends InputMethodService {
                 return;
             }
 
+            historyId = HistoryStore.add(this,
+                    editSelection ? HistoryStore.SOURCE_EDIT
+                            : postProcess ? HistoryStore.SOURCE_AI : HistoryStore.SOURCE_DICTATION,
+                    text, captureAudio, Math.max(0, captureStoppedAt - captureStartedAt));
+            captureAudio = null;
+
             if (editSelection) {
                 if (selectionToEdit == null) {
+                    HistoryStore.finish(this, historyId, null, null, HistoryStore.OUTCOME_FAILED,
+                            getString(R.string.ime_edit_selection_changed));
                     finishOperation(getString(R.string.ime_edit_selection_changed));
                 } else {
                     startSelectionPostProcessing(text);
@@ -937,6 +970,8 @@ public class RustInputMethodService extends InputMethodService {
                     if (requestGeneration != llmGeneration) return;
                     postProcessRunning = false;
                     selectionToEdit = null;
+                    HistoryStore.finish(RustInputMethodService.this, historyId, null,
+                            target.text, HistoryStore.OUTCOME_FAILED, message);
                     finishOperation(getString(R.string.ime_edit_failed, message));
                 });
             }
@@ -953,9 +988,16 @@ public class RustInputMethodService extends InputMethodService {
     private void deliverText(String text, String statusMessage) {
         String committed = text + " ";
         InputConnection ic = getCurrentInputConnection();
+        // statusMessage, when set, says why AI processing didn't happen.
+        String historyNote = statusMessage;
         if (inputActive && ic != null && isCurrentTarget(recordingTargetKey)) {
             commitTranscribedText(ic, committed);
+            HistoryStore.finish(this, historyId, text, null, HistoryStore.OUTCOME_INSERTED, historyNote);
         } else {
+            HistoryStore.finish(this, historyId, text, null,
+                    TranscriptRescue.isClipboardEnabled(this)
+                            ? HistoryStore.OUTCOME_CLIPBOARD : HistoryStore.OUTCOME_KEPT,
+                    historyNote);
             // The field the user dictated into is gone (app minimized, focus
             // moved elsewhere). Typing into whatever is focused now could put
             // the text in the wrong place, so keep it for the user instead.
@@ -1065,7 +1107,7 @@ public class RustInputMethodService extends InputMethodService {
             } catch (Throwable t) {
                 Log.w(TAG, "Couldn't cancel recording", t);
                 try {
-                    stopRecording();
+                    stopRecording(null);
                     fellBackToTranscription = true;
                 } catch (Throwable stopError) {
                     Log.w(TAG, "Couldn't stop recording after cancel failed", stopError);
@@ -1109,6 +1151,7 @@ public class RustInputMethodService extends InputMethodService {
         if (postProcessRunning) {
             llmGeneration++;
             postProcessRunning = false;
+            HistoryStore.finish(this, historyId, null, null, HistoryStore.OUTCOME_CANCELED, null);
             cancelRequested = false;
             selectionToEdit = null;
             finishOperation(getString(R.string.ime_canceled));
@@ -1124,12 +1167,17 @@ public class RustInputMethodService extends InputMethodService {
                 || current.end != target.end
                 || !current.text.equals(target.text)) {
             // The edit is done but has nowhere safe to go; keep it.
+            HistoryStore.finish(this, historyId, replacement, target.text,
+                    TranscriptRescue.isClipboardEnabled(this)
+                            ? HistoryStore.OUTCOME_CLIPBOARD : HistoryStore.OUTCOME_KEPT, null);
             TranscriptRescue.rescue(this, replacement, true);
             keepPendingText(replacement);
             finishOperation("Tap to Record");
             return;
         }
         if (target.text.equals(replacement)) {
+            HistoryStore.finish(this, historyId, replacement, target.text,
+                    HistoryStore.OUTCOME_UNCHANGED, null);
             finishOperation(getString(R.string.ime_edit_no_change));
             return;
         }
@@ -1141,6 +1189,8 @@ public class RustInputMethodService extends InputMethodService {
             ic.endBatchEdit();
         }
         offerUndo(target.text, replacement, target.start, target.editorGeneration);
+        HistoryStore.finish(this, historyId, replacement, target.text,
+                HistoryStore.OUTCOME_INSERTED, null);
         finishOperation(getString(R.string.ime_change_applied));
     }
 

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 11 and older. Dictation history stays on the device: never put
+     it in a cloud backup without the user asking. -->
+<full-backup-content>
+    <exclude domain="database" path="history.db" />
+    <exclude domain="file" path="history/" />
+</full-backup-content>

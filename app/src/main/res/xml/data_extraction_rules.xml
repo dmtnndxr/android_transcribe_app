@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 12+. Same rule as backup_rules.xml: dictation history stays on
+     the device, both for cloud backup and device-to-device transfer. -->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="database" path="history.db" />
+        <exclude domain="file" path="history/" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="database" path="history.db" />
+        <exclude domain="file" path="history/" />
+    </device-transfer>
+</data-extraction-rules>
