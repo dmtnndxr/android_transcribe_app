@@ -9,8 +9,8 @@
 #   docker rmi ovi-verify && docker volume rm ovi-gradle-cache
 FROM eclipse-temurin:17-jdk-jammy
 
-# AGP 8.7.3 needs JDK 17; compileSdk 35 needs build-tools 35.
-ARG ANDROID_PLATFORM=android-35
+# AGP 8.13.2 needs JDK 17; compileSdk 36 builds with build-tools 35 (AGP default).
+ARG ANDROID_PLATFORM=android-36
 ARG ANDROID_BUILD_TOOLS=35.0.0
 ARG CMDLINE_TOOLS_URL=https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
 ARG JSON_JAR_URL=https://repo1.maven.org/maven2/org/json/json/20240303/json-20240303.jar

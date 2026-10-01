@@ -217,7 +217,7 @@ The built-in Parakeet TDT GGUF model (~485 MB) is automatically downloaded from 
 ├── src/                                  # Rust source code (cdylib)
 ├── Cargo.toml                            # Rust crate manifest
 ├── build.gradle.kts                      # Root Gradle config
-├── app/build.gradle.kts                  # App module config (AGP 8.7.3)
+├── app/build.gradle.kts                  # App module config (AGP 8.13.2)
 ├── settings.gradle.kts
 ├── gradle.properties
 └── fastlane/metadata/android/            # F-Droid metadata

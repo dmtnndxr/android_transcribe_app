@@ -11,8 +11,8 @@ tools/verify/run.sh shell    # interactive shell in the image
 tools/verify/run.sh clean    # delete the image and the Gradle cache volume
 ```
 
-The first run builds the image (~1 GB: JDK 17, Android SDK platform 35,
-build-tools 35) and downloads Gradle 8.9 plus the AARs into a named volume.
+The first run builds the image (~1 GB: JDK 17, Android SDK platform 36,
+build-tools 35) and downloads Gradle 8.13 plus the AARs into a named volume.
 Later runs are incremental.
 
 ## What each tier covers
