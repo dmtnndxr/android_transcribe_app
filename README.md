@@ -1,36 +1,76 @@
+<img src="docs/branding/icon-v6-melting-mic-skull-hint-1024.png" width="96" align="right" alt="Offline Voice Input+ icon">
+
 # Offline Voice Input+ (Android)
 
-> [!IMPORTANT]
-> **Unofficial fork:** Offline Voice Input+ is an independent fork of
-> [Offline Voice Input](https://github.com/notune/android_transcribe_app). It adds
-> configurable AI post-processing of transcribed text and is not affiliated with
-> or endorsed by the upstream project.
+Private speech-to-text for Android. Speech is transcribed on the phone and typed into any app; optionally an AI model of your choice cleans the text up or edits it on a spoken instruction.
 
-An offline, privacy-focused speech-to-text tool for Android, built with Rust. Tap the microphone on the keyboard you already use — your speech is transcribed entirely on-device and typed into any app. Also includes live subtitles and an optional dedicated voice keyboard.
+> [!IMPORTANT]
+> **Unofficial fork.** Offline Voice Input+ is an independent fork of
+> [Offline Voice Input](https://github.com/notune/android_transcribe_app) by Noah Mühl.
+> It is not affiliated with or endorsed by the upstream project. See
+> [what the fork adds](#what-this-fork-adds).
+
+## Why this app
+
+- **Your voice stays on the phone.** Recognition runs on-device and works in airplane mode. No account, no tracking.
+- **Works with the keyboard you already use.** Tap the microphone in SwiftKey, HeliBoard and others, or use the built-in voice keyboard.
+- **Edit text by voice.** Select text, tap the wand, say "make this shorter" or "translate to German".
+- **Your own AI, or none.** Cleanup and editing work with any OpenAI-compatible server, including a local Ollama or LM Studio. Off by default.
+- **Nothing gets lost.** If the text field is gone when transcription finishes, the text goes to the clipboard, and every dictation is kept in an on-device history with its recording.
+- **Free and open source** (MIT).
+
+## Install
 
 [<img src="https://i.ibb.co/q0mdc4Z/get-it-on-github.png"
 alt="Download Offline Voice Input+ from GitHub"
 height="80">](https://github.com/dmtnndxr/android_transcribe_app/releases/latest)
+[<img src="https://raw.githubusercontent.com/ImranR98/Obtainium/main/assets/graphics/badge_obtainium.png"
+alt="Get it on Obtainium"
+height="80">](https://apps.obtainium.imranr.dev/redirect?r=obtainium://add/https://github.com/dmtnndxr/android_transcribe_app)
 
-Download the signed **Offline Voice Input+** APK from this fork's
-[latest release](https://github.com/dmtnndxr/android_transcribe_app/releases/latest).
-It uses its own application ID (`io.github.dmtnndxr.transcribe`) and can be installed alongside the original app.
+1. Download the APK from the [latest release](https://github.com/dmtnndxr/android_transcribe_app/releases/latest) (about 460 MB: the speech model is inside).
+2. Open the file. Android asks once to allow installs from your browser or file manager.
+3. Open the app and grant the microphone permission.
+
+**Updates.** The app doesn't update itself. Either install a newer APK over the old one (settings, models and history are kept), or add the repository to [Obtainium](https://github.com/ImranR98/Obtainium) with the badge above and it will fetch new releases from GitHub.
+
+Requirements: Android 8.0 or newer, a 64-bit ARM phone (arm64-v8a). The app ID is `io.github.dmtnndxr.transcribe`, so it installs alongside the original app.
 
 Looking for the original project? Visit the
 [upstream repository](https://github.com/notune/android_transcribe_app) or install
 the [original Offline Voice Input from Google Play](https://play.google.com/store/apps/details?id=dev.notune.transcribe).
 
+## What this fork adds
+
+| | Original | Offline Voice Input+ |
+|---|---|---|
+| Offline dictation, live subtitles, audio-file transcription, custom GGUF models | ✅ | ✅ |
+| AI post-processing with your own OpenAI-compatible server | — | ✅ |
+| Voice editing of selected text (the wand) | — | ✅ |
+| Live text while you speak (streaming models) | — | ✅ |
+| Cancel during recording, transcription or AI; Undo after a voice edit | — | ✅ |
+| Punctuation keys on the voice keyboard | — | ✅ |
+| Text copied to the clipboard when its field is gone | — | ✅ |
+| On-device history with recordings and search | — | ✅ |
+| Distribution | Google Play | GitHub Releases |
+
+The comparison is against upstream 0.1.18, the version the fork is based on.
+
 ## Features
 
 - **Voice input in any app:** Tap the microphone on the keyboard you already use (SwiftKey, etc.) or a website's voice search, and your speech is transcribed straight into the text field. The app registers as your device's speech-to-text provider.
-- **100% offline & private:** The Parakeet TDT model runs entirely on-device — no audio ever leaves your phone, and no network is required. (The one exception is *AI cleanup*, below: it is off by default, and even then only the finished text is sent, never audio.)
+- **100% offline & private:** The Parakeet TDT model runs entirely on-device — no audio ever leaves your phone, and no network is required. (The one exception is *AI post-processing*, below: it is off by default, and even then only the finished text is sent, never audio.)
 - **Live Subtitles:** Real-time captions for any audio/video playing on your device.
+- **Transcribe audio files:** Share an audio file to the app, or open it with the app, to get its text.
 - **Optional voice keyboard:** A built-in keyboard you can switch to for voice input wherever you prefer it.
 - **Supported Languages:** Bulgarian, Croatian, Czech, Danish, Dutch, English, Estonian, Finnish, French, German, Greek, Hungarian, Italian, Latvian, Lithuanian, Maltese, Polish, Portuguese, Romanian, Slovak, Slovenian, Spanish, Swedish, Russian, Ukrainian.
-- **Custom models:** Import any [transcribe.cpp](https://github.com/handy-computer/transcribe.cpp) GGUF model (Whisper, Nemotron streaming, Canary, more Parakeet variants, …) from a downloaded file — the app stays fully offline; downloads happen in your browser.
-- **Optional AI cleanup:** A second microphone on the voice keyboard runs your transcription through an LLM before inserting it — fixing grammar, reformatting, translating, or whatever your prompt asks for. Works with any OpenAI-compatible endpoint, including a local Ollama or LM Studio. Off by default.
+- **Custom models:** Import any [transcribe.cpp](https://github.com/handy-computer/transcribe.cpp) GGUF model (Whisper, Nemotron streaming, Canary, more Parakeet variants, …) from a downloaded file. Streaming models show the text while you speak.
+- **Optional AI post-processing:** A second microphone on the voice keyboard runs your transcription through an LLM before inserting it — fixing grammar, reformatting, translating, or whatever your prompt asks for. Works with any OpenAI-compatible endpoint, including a local Ollama or LM Studio. Off by default.
 - **Voice editing of selected text:** Select text in an editor, tap the wand on the voice keyboard, and speak an instruction such as “make this shorter.” The replacement is applied only if the same text is still selected.
-- **Efficient native backend:** All models run through [transcribe.cpp](https://github.com/handy-computer/transcribe.cpp) (ggml), wrapped in a safe Rust core.
+- **History:** Every dictation is saved on the phone with its recording, the recognized text and the final text. Search it, replay it, copy or share it. Can be turned off.
+- **Text is never lost:** If you leave the field before transcription finishes, the text is copied to the clipboard instead of being typed somewhere else.
+
+All settings are described in the [settings reference](docs/settings.md).
 
 ## Screenshots
 
@@ -69,13 +109,13 @@ Tap **Try voice input** on the home screen to test the whole flow in one tap.
 
 Prefer voice input as its own keyboard? Enable the **Offline Voice Input** keyboard via *Open Keyboard Settings* on the home screen, switch to it from your keyboard switcher, then tap **Tap to Record**. By default the recording keeps running even if you switch apps or the keyboard closes (turn off *Record in background* in settings if you don't want that) — the text is inserted when you come back.
 
-### AI cleanup (optional)
+### AI post-processing (optional)
 
 The voice keyboard can show a **second, smaller microphone** that transcribes exactly like the main one, then sends the text to an LLM before inserting it. Use it to fix grammar and punctuation, reformat into bullet points, translate, or anything else you write a prompt for. The main microphone is untouched and stays fully offline.
 
-Set it up in the app under **AI cleanup**:
+Set it up in the app under **Set up AI post-processing**:
 
-1. Turn on **Enable AI cleanup** — this is what makes the second mic appear on the keyboard.
+1. Turn on **Enable AI post-processing** — this is what makes the second mic appear on the keyboard.
 2. Pick a **preset** to fill in the address, then adjust it. Any OpenAI-compatible `/chat/completions` endpoint works:
 
    | Server | Base URL |
@@ -94,13 +134,14 @@ Set it up in the app under **AI cleanup**:
 5. Hit **Send test sentence** to confirm it all works before relying on it mid-typing.
 
 The separate **Selected-text editing** settings page controls the wand. It reuses
-the AI-cleanup server, API key and model by default; you can override only the
+the AI post-processing server, API key and model by default; you can override only the
 model, edit the selection editor's system prompt, reset that prompt to its safe
 default, and run a dedicated test request.
 
 Notes:
 
 - **Cancel and undo.** The voice keyboard exposes Cancel while recording, transcribing, or waiting for AI. After a voice edit replaces selected text, Undo is offered briefly and only runs if the replacement is still unchanged.
+- **Nowhere to insert.** If the field you dictated into is gone when the text is ready, the text is copied to the clipboard (or offered on the keyboard next time, if you turn copying off). It is also in the history.
 - **Failures never lose your words.** If the server is unreachable, the key is rejected, or the request times out, the raw transcription is inserted anyway and the keyboard's status line says what went wrong.
 - **Small models disappoint.** Anything under ~3B parameters tends to ignore the instruction and paraphrase or answer your text instead of cleaning it up.
 - **Privacy.** Text dictated with the second mic leaves the device. Audio never does. Point it at a local server to keep everything on your own network.
@@ -127,7 +168,31 @@ This relies on the undocumented `PROJECT_MEDIA` app-op; on some OEM builds it ma
 
 ### Custom speech models
 
-The built-in Parakeet model works out of the box. Under **Manage speech models** you can additionally import any [transcribe.cpp](https://github.com/handy-computer/transcribe.cpp) GGUF model: download a `.gguf` file in your browser (the in-app *Where to get models* dialog lists direct links, e.g. a tiny 135 MB English-only Parakeet, the multilingual Nemotron 3.5 streaming model with punctuation, or Whisper large-v3-turbo), then import it via the system file picker and select it. The app itself needs no internet permission — model files are simply copied into the app's private storage. An optional language hint (e.g. `en-US`, or `auto`) can be set for imported models.
+The built-in Parakeet model works out of the box. Under **Manage speech models** you can additionally import any [transcribe.cpp](https://github.com/handy-computer/transcribe.cpp) GGUF model: download a `.gguf` file in your browser (the in-app *Where to get models* dialog lists direct links, e.g. a tiny 135 MB English-only Parakeet, the multilingual Nemotron 3.5 streaming model with punctuation, or Whisper large-v3-turbo), then import it via the system file picker and select it. The app never downloads models itself — files are simply copied into the app's private storage. An optional language hint (e.g. `en-US`, or `auto`) can be set for imported models.
+
+## Technical details
+
+- **Core:** Rust (`cdylib`) for audio capture and the engine, with a thin Java layer for the Android UI, the input method and the speech service.
+- **Inference:** [transcribe.cpp](https://github.com/handy-computer/transcribe.cpp) (ggml) on the CPU. Any GGUF model it supports can be imported.
+- **Built-in model:** NVIDIA Parakeet TDT 0.6B v3, Q4_K_M GGUF, about 485 MB, shipped inside the APK. Nothing is downloaded at first launch.
+- **Streaming:** models that support it (Nemotron streaming) transcribe while you speak; the others transcribe after you stop.
+- **Integration:** an input method (IME), a `RecognitionService` for apps that use Android's `SpeechRecognizer`, and a `RECOGNIZE_SPEECH` activity for keyboards that fire the speech intent.
+- **AI:** a plain OpenAI-compatible `/chat/completions` client with no SDK. Connect timeout 10 s, reply timeout 45 s.
+- **Platform:** Android 8.0+ (API 26), target API 36, arm64-v8a only.
+- **Storage:** settings, models and history (SQLite plus WAV files) live in app-private storage. History is excluded from backups.
+
+What leaves the phone:
+
+| Data | When | Where |
+|---|---|---|
+| Audio | Never | — |
+| Dictated text | Only with **Dictate + AI** | The server you configured |
+| Selected text and your spoken instruction (as text) | Only when you use the wand | The server you configured |
+| API key | With those requests | The server you configured |
+
+The internet permission exists only for these requests. With AI post-processing off, the app makes no network connections.
+
+Other permissions: microphone (dictation), screen capture and display over other apps (live subtitles), notifications (the subtitles service notice).
 
 ## Prerequisites
 
@@ -214,7 +279,9 @@ The built-in Parakeet TDT GGUF model (~485 MB) is automatically downloaded from 
 │       ├── res/                          # Resources (layouts, drawables, etc.)
 │       ├── assets/                       # Model files (downloaded at build time)
 │       └── jniLibs/                      # Native .so files (built by cargo-ndk)
+│   └── src/plus/res/                     # Plus edition: name and icon
 ├── src/                                  # Rust source code (cdylib)
+├── docs/                                 # Settings reference, roadmap, branding
 ├── Cargo.toml                            # Rust crate manifest
 ├── build.gradle.kts                      # Root Gradle config
 ├── app/build.gradle.kts                  # App module config (AGP 8.13.2)
