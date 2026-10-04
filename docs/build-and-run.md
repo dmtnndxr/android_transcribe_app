@@ -68,7 +68,7 @@ Check it worked: `adb devices` should list your phone.
 ## 5. Enable the keyboard
 
 **Settings → General management → Keyboard list and default →**
-turn on **Offline Voice Input**.
+turn on **Boice**.
 
 To use it: tap the keyboard icon in the navigation bar (or long-press space)
 and pick it.

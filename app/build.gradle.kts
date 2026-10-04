@@ -39,19 +39,19 @@ android {
             }
         }
 
-        // Stable self-signed key for the independently installable Plus build.
+        // Stable self-signed key of Boice (the Plus build).
         // No Google Play account is involved. Local builds read the key and its
         // password from ignored files; CI materializes the same files from
-        // repository secrets so every APK can update the previous Plus APK.
+        // repository secrets so every APK can update the previous one.
         create("plus") {
-            val ksFile = rootProject.file("plus.keystore")
-            val passwordFile = rootProject.file("plus-signing.pass")
+            val ksFile = rootProject.file("boice.keystore")
+            val passwordFile = rootProject.file("boice-signing.pass")
             if (ksFile.isFile && ksFile.length() > 0
                     && passwordFile.isFile && passwordFile.length() > 0) {
                 val password = passwordFile.readText().trim()
                 storeFile = ksFile
                 storePassword = password
-                keyAlias = "offline-voice-input-plus"
+                keyAlias = "boice"
                 keyPassword = password
             }
         }
@@ -68,8 +68,7 @@ android {
             // Fork-owned ID rather than a suffix on upstream's dev.notune namespace.
             // The Java package/namespace stays dev.notune.transcribe to keep
             // upstream merges and the JNI symbol names untouched.
-            applicationId = "io.github.dmtnndxr.transcribe"
-            versionNameSuffix = "-plus"
+            applicationId = "io.github.dmtnndxr.boice"
             signingConfig = signingConfigs.getByName("plus")
         }
     }

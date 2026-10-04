@@ -23,6 +23,8 @@ local.properties
 release.keystore
 plus.keystore
 plus-signing.pass
+boice.keystore
+boice-signing.pass
 
 # Rust build output
 /target/

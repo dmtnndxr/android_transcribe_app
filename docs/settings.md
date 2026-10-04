@@ -1,6 +1,6 @@
 # Settings reference
 
-Every setting in Offline Voice Input+, what it does, its default, and what it
+Every setting in Boice, what it does, its default, and what it
 costs in privacy, battery or speed. Names match the English interface.
 
 Settings are stored in the app's private storage. Nothing is synced, and the

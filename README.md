@@ -1,11 +1,11 @@
-<img src="docs/branding/icon-v6-melting-mic-skull-hint-1024.png" width="96" align="right" alt="Offline Voice Input+ icon">
+<img src="docs/branding/icon-v6-melting-mic-skull-hint-1024.png" width="96" align="right" alt="Boice icon">
 
-# Offline Voice Input+ (Android)
+# Boice (Android)
 
 Private speech-to-text for Android. Speech is transcribed on the phone and typed into any app; optionally an AI model of your choice cleans the text up or edits it on a spoken instruction.
 
 > [!IMPORTANT]
-> **Unofficial fork.** Offline Voice Input+ is an independent fork of
+> **Unofficial fork.** Boice is an independent fork of
 > [Offline Voice Input](https://github.com/notune/android_transcribe_app) by Noah Mühl.
 > It is not affiliated with or endorsed by the upstream project. See
 > [what the fork adds](#what-this-fork-adds).
@@ -22,7 +22,7 @@ Private speech-to-text for Android. Speech is transcribed on the phone and typed
 ## Install
 
 [<img src="https://i.ibb.co/q0mdc4Z/get-it-on-github.png"
-alt="Download Offline Voice Input+ from GitHub"
+alt="Download Boice from GitHub"
 height="80">](https://github.com/dmtnndxr/android_transcribe_app/releases/latest)
 [<img src="https://raw.githubusercontent.com/ImranR98/Obtainium/main/assets/graphics/badge_obtainium.png"
 alt="Get it on Obtainium"
@@ -34,7 +34,7 @@ height="80">](https://apps.obtainium.imranr.dev/redirect?r=obtainium://add/https
 
 **Updates.** The app doesn't update itself. Either install a newer APK over the old one (settings, models and history are kept), or add the repository to [Obtainium](https://github.com/ImranR98/Obtainium) with the badge above and it will fetch new releases from GitHub.
 
-Requirements: Android 8.0 or newer, a 64-bit ARM phone (arm64-v8a). The app ID is `io.github.dmtnndxr.transcribe`, so it installs alongside the original app.
+Requirements: Android 8.0 or newer, a 64-bit ARM phone (arm64-v8a). The app ID is `io.github.dmtnndxr.boice`, so it installs alongside the original app.
 
 Looking for the original project? Visit the
 [upstream repository](https://github.com/notune/android_transcribe_app) or install
@@ -42,7 +42,7 @@ the [original Offline Voice Input from Google Play](https://play.google.com/stor
 
 ## What this fork adds
 
-| | Original | Offline Voice Input+ |
+| | Original | Boice |
 |---|---|---|
 | Offline dictation, live subtitles, audio-file transcription, custom GGUF models | ✅ | ✅ |
 | AI post-processing with your own OpenAI-compatible server | — | ✅ |
@@ -84,7 +84,7 @@ All settings are described in the [settings reference](docs/settings.md).
 
 ### Voice input in any app (recommended)
 
-1. Open **Offline Voice Input** once and grant the microphone permission. The home screen shows a **Voice input** status — green when you're ready to go.
+1. Open **Boice** once and grant the microphone permission. The home screen shows a **Voice input** status — green when you're ready to go.
 2. In any app, tap the **microphone** on your keyboard (e.g. Microsoft SwiftKey) or the voice-search mic on a website. A compact panel slides up over the app you're in, you speak, and your words are inserted as text. Tap to stop — or enable *Auto-stop after silence* in the app's settings to have it stop by itself.
 
 The app plugs into Android's speech-to-text in **three** ways, so it works with a wide range of keyboards and apps:
@@ -101,13 +101,13 @@ Tap **Try voice input** on the home screen to test the whole flow in one tap.
 
 - **Microsoft SwiftKey** (not open source) opens the compact voice panel directly, like website voice search does. If SwiftKey's own voice typing opens instead, go to SwiftKey Settings → *Rich input* → turn off **Multi-modal voice typing**.
 - **AnySoftKeyboard** is the open-source way to get the panel: its mic key fires the standard speech intent as long as no *voice keyboard* is enabled on the system. (If one is enabled — ours or Google's — it switches to that instead.)
-- **HeliBoard, FlorisBoard, OpenBoard, Fossify Keyboard, Unexpected Keyboard:** their mic key never opens the panel — it switches to the system *voice input keyboard*. Enable the **Offline Voice Input** keyboard (see below) and it opens automatically; its keyboard-switch key takes you back. **FUTO Keyboard** ships its own built-in voice input.
+- **HeliBoard, FlorisBoard, OpenBoard, Fossify Keyboard, Unexpected Keyboard:** their mic key never opens the panel — it switches to the system *voice input keyboard*. Enable the **Boice** keyboard (see below) and it opens automatically; its keyboard-switch key takes you back. **FUTO Keyboard** ships its own built-in voice input.
 - **Gboard:** only uses Google's own voice typing, so it can't hand speech to this app at all.
-- If Android shows a chooser, pick **Offline Voice Input** and tap **Always**. If another app always opens, clear its default in *Settings → Apps*.
+- If Android shows a chooser, pick **Boice** and tap **Always**. If another app always opens, clear its default in *Settings → Apps*.
 
 ### Dedicated voice keyboard (optional)
 
-Prefer voice input as its own keyboard? Enable the **Offline Voice Input** keyboard via *Open Keyboard Settings* on the home screen, switch to it from your keyboard switcher, then tap **Tap to Record**. By default the recording keeps running even if you switch apps or the keyboard closes (turn off *Record in background* in settings if you don't want that) — the text is inserted when you come back.
+Prefer voice input as its own keyboard? Enable the **Boice** keyboard via *Open Keyboard Settings* on the home screen, switch to it from your keyboard switcher, then tap **Tap to Record**. By default the recording keeps running even if you switch apps or the keyboard closes (turn off *Record in background* in settings if you don't want that) — the text is inserted when you come back.
 
 ### AI post-processing (optional)
 
@@ -155,13 +155,13 @@ Tap **Start Live Subtitles** and choose *Share entire screen* to get real-time, 
 **Advanced: skip the screen-capture dialog.** Android shows a "Start recording or casting?" consent dialog every time subtitles start. You can pre-approve it once via adb — after that, subtitles start instantly and the setting survives reboots (USB debugging can be turned off again afterwards):
 
 ```bash
-adb shell appops set --user 0 io.github.dmtnndxr.transcribe PROJECT_MEDIA allow
+adb shell appops set --user 0 io.github.dmtnndxr.boice PROJECT_MEDIA allow
 ```
 
 To undo it:
 
 ```bash
-adb shell appops set --user 0 io.github.dmtnndxr.transcribe PROJECT_MEDIA default
+adb shell appops set --user 0 io.github.dmtnndxr.boice PROJECT_MEDIA default
 ```
 
 This relies on the undocumented `PROJECT_MEDIA` app-op; on some OEM builds it may not work or may get reset by the system — the normal dialog remains the fallback. The same instructions are shown in-app under *Skip the permission dialog (advanced)*.

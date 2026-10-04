@@ -135,10 +135,10 @@ jobs:
     - name: Determine signing mode
       id: signing
       env:
-        PLUS_KEYSTORE_BASE64: ${{ secrets.PLUS_KEYSTORE_BASE64 }}
-        PLUS_KEYSTORE_PASSWORD: ${{ secrets.PLUS_KEYSTORE_PASSWORD }}
+        BOICE_KEYSTORE_BASE64: ${{ secrets.BOICE_KEYSTORE_BASE64 }}
+        BOICE_KEYSTORE_PASSWORD: ${{ secrets.BOICE_KEYSTORE_PASSWORD }}
       run: |
-        if [ -n "$PLUS_KEYSTORE_BASE64" ] && [ -n "$PLUS_KEYSTORE_PASSWORD" ]; then
+        if [ -n "$BOICE_KEYSTORE_BASE64" ] && [ -n "$BOICE_KEYSTORE_PASSWORD" ]; then
           echo "mode=release" >> $GITHUB_OUTPUT
           echo "Plus signing secrets present — building an updateable Plus APK."
         else
@@ -151,13 +151,13 @@ jobs:
     - name: Materialize Plus signing files
       if: steps.signing.outputs.mode == 'release'
       env:
-        PLUS_KEYSTORE_BASE64: ${{ secrets.PLUS_KEYSTORE_BASE64 }}
-        PLUS_KEYSTORE_PASSWORD: ${{ secrets.PLUS_KEYSTORE_PASSWORD }}
+        BOICE_KEYSTORE_BASE64: ${{ secrets.BOICE_KEYSTORE_BASE64 }}
+        BOICE_KEYSTORE_PASSWORD: ${{ secrets.BOICE_KEYSTORE_PASSWORD }}
       run: |
-        printf '%s' "$PLUS_KEYSTORE_BASE64" | base64 --decode > plus.keystore
-        printf '%s' "$PLUS_KEYSTORE_PASSWORD" > plus-signing.pass
-        chmod 600 plus.keystore plus-signing.pass
-        if [ ! -s plus.keystore ] || [ ! -s plus-signing.pass ]; then
+        printf '%s' "$BOICE_KEYSTORE_BASE64" | base64 --decode > boice.keystore
+        printf '%s' "$BOICE_KEYSTORE_PASSWORD" > boice-signing.pass
+        chmod 600 boice.keystore boice-signing.pass
+        if [ ! -s boice.keystore ] || [ ! -s boice-signing.pass ]; then
           echo "::error::Plus signing files are empty."
           exit 1
         fi
@@ -187,14 +187,14 @@ jobs:
       run: |
         if [ "${{ steps.signing.outputs.mode }}" = "release" ]; then
           cp app/build/outputs/apk/plus/release/app-plus-release.apk \
-             offline-voice-input-plus-v${VERSION_NAME}.apk
-          echo "files=offline-voice-input-plus-v${VERSION_NAME}.apk" >> $GITHUB_OUTPUT
+             boice-v${VERSION_NAME}.apk
+          echo "files=boice-v${VERSION_NAME}.apk" >> $GITHUB_OUTPUT
         else
           cp app/build/outputs/apk/plus/debug/app-plus-debug.apk \
-             offline-voice-input-plus-v${VERSION_NAME}-debug.apk
-          echo "files=offline-voice-input-plus-v${VERSION_NAME}-debug.apk" >> $GITHUB_OUTPUT
+             boice-v${VERSION_NAME}-debug.apk
+          echo "files=boice-v${VERSION_NAME}-debug.apk" >> $GITHUB_OUTPUT
         fi
-        ls -lh offline-voice-input-plus-v${VERSION_NAME}*
+        ls -lh boice-v${VERSION_NAME}*
 
     # retention-days caps how long these sit against the repo's Actions storage
     # allowance. The APK bundles the ~485 MB speech model, so one build per
@@ -202,9 +202,9 @@ jobs:
     - name: Upload Plus APK artifact
       uses: actions/upload-artifact@v4
       with:
-        name: offline-voice-input-plus-${{ steps.signing.outputs.mode }}-v${{ env.VERSION_NAME }}-${{ github.run_number }}
+        name: boice-${{ steps.signing.outputs.mode }}-v${{ env.VERSION_NAME }}-${{ github.run_number }}
         path: |
-          offline-voice-input-plus-v${{ env.VERSION_NAME }}*.apk
+          boice-v${{ env.VERSION_NAME }}*.apk
         retention-days: 14
         if-no-files-found: error
 
@@ -217,7 +217,7 @@ jobs:
         name: Release v${{ env.VERSION_NAME }}
         body: |
           Built from ${{ github.sha }}.
-          Edition: Offline Voice Input+
+          Edition: Boice
           Signing: ${{ steps.signing.outputs.mode }}
         files: |
-          offline-voice-input-plus-v${{ env.VERSION_NAME }}*.apk
+          boice-v${{ env.VERSION_NAME }}*.apk

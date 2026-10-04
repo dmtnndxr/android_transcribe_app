@@ -1,4 +1,4 @@
-Offline Voice Input+ is speech-to-text that runs entirely on your device. Whether you're writing emails, taking notes, or chatting, your voice never leaves your phone — no account, no tracking.
+Boice is speech-to-text that runs entirely on your device. Whether you're writing emails, taking notes, or chatting, your voice never leaves your phone — no account, no tracking.
 
 VOICE TYPING IN ANY APP
 Tap the microphone on a compatible keyboard — such as Microsoft SwiftKey — or a website's voice-search button, and your speech is transcribed straight into the text field. The app registers as your device's speech-to-text provider.
@@ -38,5 +38,5 @@ POWERED BY OPEN SOURCE
 Source code, issues and contributions:
 https://github.com/dmtnndxr/android_transcribe_app
 
-Offline Voice Input+ is an independent fork of the original Offline Voice Input project:
+Boice is an independent fork of the original Offline Voice Input project:
 https://github.com/notune/android_transcribe_app
