@@ -72,6 +72,8 @@ public class MainActivity extends AppCompatActivity {
         voiceGrantButton.setOnClickListener(v -> checkAndRequestPermissions());
         voiceTryButton.setOnClickListener(v -> launchVoiceTest());
         voiceHelpButton.setOnClickListener(v -> showHelpDialog());
+        findViewById(R.id.btn_onboarding).setOnClickListener(v ->
+                startActivity(new Intent(this, OnboardingActivity.class)));
 
         imeSettingsButton.setOnClickListener(v -> {
              Intent intent = new Intent(Settings.ACTION_INPUT_METHOD_SETTINGS);
@@ -159,6 +161,10 @@ public class MainActivity extends AppCompatActivity {
 
         // Start init
         initNative(this);
+
+        if (savedInstanceState == null && !OnboardingActivity.isDone(this)) {
+            startActivity(new Intent(this, OnboardingActivity.class));
+        }
     }
 
     @Override

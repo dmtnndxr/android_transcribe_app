@@ -46,6 +46,12 @@
             </intent-filter>
         </activity>
 
+        <!-- First-run setup wizard -->
+        <activity
+            android:name=".OnboardingActivity"
+            android:configChanges="orientation|keyboardHidden|screenSize"
+            android:exported="false" />
+
         <!-- Speech model management -->
         <activity
             android:name=".ModelsActivity"
