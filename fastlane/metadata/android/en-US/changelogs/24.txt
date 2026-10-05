@@ -1,0 +1,5 @@
+- the app is now called Boice, with its own icon; it installs as a new app (io.github.dmtnndxr.boice), so set it up again and remove the old one
+- first-run setup wizard that shows the way to dictate with your keyboard
+- home screen ordered by what you need first
+- history of dictations with recordings, search, copy and share
+- text that has nowhere to go is copied to the clipboard instead of being lost
