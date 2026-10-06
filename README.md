@@ -74,11 +74,13 @@ All settings are described in the [settings reference](docs/settings.md).
 
 ## Screenshots
 
-<p float="left">
-  <img src=".screenshots/screenshot_home.png" width="30%" />
-  <img src=".screenshots/screenshot_recording.png" width="30%" />
-  <img src=".screenshots/screenshot_subtitles.png" width="30%" />
-</p>
+| Setup that fits your keyboard | Dictation | AI post-processing |
+|---|---|---|
+| <img src=".screenshots/onboarding_keyboard.png" width="240" /> | <img src=".screenshots/keyboard_dictated.png" width="240" /> | <img src=".screenshots/ai_result.png" width="240" /> |
+| **Voice edit of selected text** | **History** | **Live subtitles** |
+| <img src=".screenshots/edit_result.png" width="240" /> | <img src=".screenshots/history.png" width="240" /> | <img src=".screenshots/screenshot_subtitles.png" width="240" /> |
+
+Dark theme versions are in [.screenshots/dark](.screenshots/dark). The screenshots are retaken with [tools/screenshots.sh](tools/screenshots.sh).
 
 ## Usage
 
