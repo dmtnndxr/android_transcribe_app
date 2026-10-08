@@ -91,6 +91,10 @@ public class OnboardingActivity extends AppCompatActivity {
     private LinearLayout flow, status;
     private ImageView statusIcon;
     private EditText tryField;
+    /** Result of the AI connection test on this screen, kept across re-renders. */
+    private String aiTestResult;
+    private boolean aiTestOk;
+    private boolean aiTesting;
     private MaterialButton action, action2, back, next;
 
     public static boolean isDone(Context ctx) {
@@ -174,7 +178,7 @@ public class OnboardingActivity extends AppCompatActivity {
     }
 
     private void go(int newStep) {
-        if (step == STEP_TRY) hideKeyboard();
+        if (step == STEP_TRY || step == STEP_AI) hideKeyboard();
         step = Math.max(STEP_WELCOME, Math.min(STEP_DONE, newStep));
         render();
     }
@@ -290,6 +294,7 @@ public class OnboardingActivity extends AppCompatActivity {
         body.setText(getString(panel ? R.string.onb_try_body_panel : R.string.onb_try_body_switch,
                 appName));
         tryField.setVisibility(View.VISIBLE);
+        tryField.setHint(R.string.onb_try_hint);
         if (!panel && isOurKeyboardEnabled()) {
             showAction(action2, getString(R.string.onb_try_pick), v -> {
                 tryField.requestFocus();
@@ -327,14 +332,62 @@ public class OnboardingActivity extends AppCompatActivity {
     private void renderAi() {
         title.setText(R.string.onb_ai_title);
         body.setText(getString(R.string.onb_ai_body, appName));
-        example.setVisibility(View.VISIBLE);
-        example.setText(R.string.onb_ai_example);
-        showNote(getString(R.string.onb_ai_privacy));
-        boolean on = PostProcessPrefs.isEnabled(this);
-        if (on) showStatus(true, getString(R.string.onb_ai_on));
-        showAction(on ? action2 : action, getString(R.string.onb_ai_action),
+        boolean ready = PostProcessPrefs.isEnabled(this) && PostProcessPrefs.isConfigured(this);
+        if (!ready) {
+            example.setVisibility(View.VISIBLE);
+            example.setText(R.string.onb_ai_example);
+            showNote(getString(R.string.onb_ai_privacy));
+            showAction(action, getString(R.string.onb_ai_action),
+                    v -> startActivity(new Intent(this, PostProcessActivity.class)));
+            next.setText(R.string.onb_skip);
+            return;
+        }
+
+        // Configured: check the connection, try it.
+        if (aiTesting) {
+            showStatus(true, getString(R.string.pp_test_running));
+        } else if (aiTestResult != null) {
+            showStatus(aiTestOk, aiTestResult);
+        } else {
+            showStatus(true, getString(R.string.onb_ai_on_model, PostProcessPrefs.getModel(this)));
+        }
+        showAction(action, getString(R.string.onb_ai_test), v -> runAiTest());
+        showAction(action2, getString(R.string.onb_ai_change),
                 v -> startActivity(new Intent(this, PostProcessActivity.class)));
-        if (!on) next.setText(R.string.onb_skip);
+        tryField.setVisibility(View.VISIBLE);
+        tryField.setHint(R.string.onb_ai_try_hint);
+    }
+
+    /** Sends one sample sentence through the configured server, model and prompt. */
+    private void runAiTest() {
+        aiTesting = true;
+        aiTestResult = null;
+        render();
+        final String sample = getString(R.string.onb_ai_sample);
+        final String baseUrl = PostProcessPrefs.getBaseUrl(this);
+        final String apiKey = PostProcessPrefs.getApiKey(this);
+        final String model = PostProcessPrefs.getModel(this);
+        final String prompt = PostProcessPrefs.getPrompt(this);
+        new Thread(() -> {
+            String result;
+            boolean ok;
+            try {
+                result = getString(R.string.onb_ai_test_ok, sample,
+                        PostProcessClient.process(baseUrl, apiKey, model, prompt, sample));
+                ok = true;
+            } catch (PostProcessClient.PostProcessException e) {
+                result = getString(R.string.pp_test_failed, e.getMessage());
+                ok = false;
+            }
+            final String r = result;
+            final boolean o = ok;
+            runOnUiThread(() -> {
+                aiTesting = false;
+                aiTestResult = r;
+                aiTestOk = o;
+                if (step == STEP_AI) render();
+            });
+        }, "onboarding-ai-test").start();
     }
 
     private void renderDone() {

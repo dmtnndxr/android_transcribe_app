@@ -209,12 +209,15 @@ jobs:
         if-no-files-found: error
 
     # Releases are the phone-friendly path: a direct .apk download with no
-    # GitHub login and no zip to extract on-device. Tag pushes only.
+    # GitHub login and no zip to extract on-device. Tag pushes only. A tag
+    # with a hyphen (v0.1.24-beta.1) becomes a pre-release, which Obtainium
+    # skips unless "Include prereleases" is on.
     - name: Create Release
       if: startsWith(github.ref, 'refs/tags/')
       uses: softprops/action-gh-release@v1
       with:
         name: Release v${{ env.VERSION_NAME }}
+        prerelease: ${{ contains(github.ref_name, '-') }}
         body: |
           Built from ${{ github.sha }}.
           Edition: Boice

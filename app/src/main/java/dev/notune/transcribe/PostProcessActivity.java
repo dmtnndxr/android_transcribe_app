@@ -7,6 +7,8 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
+import android.widget.AutoCompleteTextView;
+import android.widget.PopupMenu;
 import android.widget.Spinner;
 import android.widget.TextView;
 
@@ -60,7 +62,11 @@ public class PostProcessActivity extends AppCompatActivity {
     private Spinner presetSpinner;
     private TextInputEditText baseUrlEdit;
     private TextInputEditText apiKeyEdit;
-    private TextInputEditText modelEdit;
+    private AutoCompleteTextView modelEdit;
+    private TextView modelsStatus;
+    private MaterialButton loadModelsButton;
+    /** Base URL the model list was last loaded for, so it isn't refetched needlessly. */
+    private String modelsLoadedFor;
     private TextInputEditText promptEdit;
     private TextView cleartextWarning;
     private TextView testResult;
@@ -124,6 +130,81 @@ public class PostProcessActivity extends AppCompatActivity {
         });
 
         testButton.setOnClickListener(v -> runTest());
+
+        modelsStatus = findViewById(R.id.text_pp_models_status);
+        loadModelsButton = findViewById(R.id.btn_pp_load_models);
+        loadModelsButton.setOnClickListener(v -> loadModels(true));
+        modelEdit.setOnFocusChangeListener((v, focused) -> {
+            if (focused) loadModels(false);
+        });
+        showSuggestedModels();
+
+        findViewById(R.id.btn_pp_templates).setOnClickListener(v -> {
+            String[][] templates = PromptTemplates.all(this);
+            PopupMenu menu = new PopupMenu(this, v);
+            for (int i = 0; i < templates.length; i++) menu.getMenu().add(0, i, i, templates[i][0]);
+            menu.setOnMenuItemClickListener(item -> {
+                promptEdit.setText(templates[item.getItemId()][1]);
+                snackbar(getString(R.string.pp_template_applied, templates[item.getItemId()][0]));
+                return true;
+            });
+            menu.show();
+        });
+    }
+
+    /** Before the server's list arrives, offer the presets' suggestions. */
+    private void showSuggestedModels() {
+        List<String> names = new ArrayList<>();
+        for (Preset p : presets) {
+            if (p.model != null && !p.model.isEmpty() && !names.contains(p.model)) names.add(p.model);
+        }
+        setModelChoices(names);
+    }
+
+    private void setModelChoices(List<String> names) {
+        modelEdit.setAdapter(new ArrayAdapter<>(this,
+                android.R.layout.simple_dropdown_item_1line, names));
+    }
+
+    /**
+     * Fetches the server's model list. Runs by itself the first time the model
+     * field gets focus; {@code force} (the button) also retries after an error.
+     */
+    private void loadModels(boolean force) {
+        String baseUrl = text(baseUrlEdit);
+        if (baseUrl.isEmpty()) {
+            if (force) modelsStatus.setText(R.string.pp_models_need_url);
+            return;
+        }
+        if (!force && baseUrl.equals(modelsLoadedFor)) return;
+        modelsLoadedFor = baseUrl;
+        String apiKey = text(apiKeyEdit);
+        loadModelsButton.setEnabled(false);
+        modelsStatus.setText(R.string.pp_models_loading);
+        new Thread(() -> {
+            List<String> ids = null;
+            String error = null;
+            try {
+                ids = PostProcessClient.listModels(baseUrl, apiKey);
+            } catch (PostProcessClient.PostProcessException e) {
+                error = e.getMessage();
+            }
+            final List<String> finalIds = ids;
+            final String finalError = error;
+            runOnUiThread(() -> {
+                if (isFinishing()) return;
+                loadModelsButton.setEnabled(true);
+                if (finalIds == null) {
+                    modelsLoadedFor = null;
+                    modelsStatus.setText(getString(R.string.pp_models_failed, finalError));
+                } else {
+                    setModelChoices(finalIds);
+                    modelsStatus.setText(getResources().getQuantityString(
+                            R.plurals.pp_models_loaded, finalIds.size(), finalIds.size()));
+                    if (modelEdit.hasFocus()) modelEdit.showDropDown();
+                }
+            });
+        }, "list-models").start();
     }
 
     @Override
@@ -145,7 +226,7 @@ public class PostProcessActivity extends AppCompatActivity {
                 prompt.equals(PostProcessPrefs.DEFAULT_PROMPT) ? "" : prompt);
     }
 
-    private static String text(TextInputEditText edit) {
+    private static String text(TextView edit) {
         return edit.getText() == null ? "" : edit.getText().toString().trim();
     }
 

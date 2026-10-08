@@ -99,6 +99,7 @@
 
     <string name="section_voice">Голосовой ввод</string>
     <string name="voice_status_ready">Готово. В любом приложении нажмите микрофон на поддерживаемой клавиатуре, и ваша речь будет введена в текстовое поле.</string>
+    <string name="voice_status_ready_keyboard">Готово. В любом приложении переключитесь на клавиатуру %1$s и нажмите микрофон. Если микрофон вашей клавиатуры предлагает выбрать приложение, выберите %1$s и «Всегда».</string>
     <string name="voice_status_need_mic">Для голосового ввода нужен доступ к микрофону.</string>
     <string name="voice_status_almost">Почти готово. Когда вы нажмёте микрофон на клавиатуре, выберите «Offline Voice Input», затем «Всегда». Нажмите «Проверить голосовой ввод» ниже, чтобы настроить это сейчас.</string>
     <string name="btn_voice_try">Проверить голосовой ввод</string>
@@ -208,6 +209,7 @@
     <string name="history_days_30">30 дней</string>
     <string name="history_storage">Записи занимают %1$s</string>
     <string name="history_play">Слушать</string>
+    <string name="history_pause">Пауза</string>
     <string name="history_stop">Стоп</string>
     <string name="history_copy">Копировать</string>
     <string name="history_share">Поделиться</string>
@@ -275,4 +277,26 @@
     <string name="onb_ai_on">ИИ включён</string>
     <string name="onb_done_title">Готово</string>
     <string name="onb_done_body">• Большой микрофон — диктовка, полностью офлайн.\n• Микрофон с искрами — диктовка с ИИ.\n• Палочка — правка выделенного текста голосом.\n• Ваши диктовки хранятся в «Истории» на главном экране.\n\nПройти настройку заново можно с главного экрана.</string>
+    <string name="pp_load_models">Загрузить модели с сервера</string>
+    <string name="pp_models_loading">Загружаю список моделей…</string>
+    <string name="pp_models_need_url">Сначала укажите адрес сервера.</string>
+    <string name="pp_models_failed">Не удалось загрузить модели: %1$s. Название можно вписать вручную.</string>
+    <plurals name="pp_models_loaded">
+        <item quantity="one">%1$d модель на сервере. Выберите или впишите любое название.</item>
+        <item quantity="few">%1$d модели на сервере. Выберите или впишите любое название.</item>
+        <item quantity="many">%1$d моделей на сервере. Выберите или впишите любое название.</item>
+        <item quantity="other">%1$d модели на сервере. Выберите или впишите любое название.</item>
+    </plurals>
+    <string name="pp_templates">Шаблоны</string>
+    <string name="pp_template_cleanup">Исправить ошибки (по умолчанию)</string>
+    <string name="pp_template_translate">Перевести на %1$s</string>
+    <string name="pp_template_formal">Официальный тон</string>
+    <string name="pp_template_bullets">Список по пунктам</string>
+    <string name="pp_template_applied">Промпт: %1$s</string>
+    <string name="onb_ai_on_model">ИИ включён: %1$s</string>
+    <string name="onb_ai_test">Проверить подключение</string>
+    <string name="onb_ai_change">Изменить настройки ИИ</string>
+    <string name="onb_ai_try_hint">Попробуйте здесь: нажмите «Диктовка с ИИ» на клавиатуре</string>
+    <string name="onb_ai_sample">ну короче давай встретимся во вторник нет стоп в среду после обеда</string>
+    <string name="onb_ai_test_ok">Работает.\nОтправлено: %1$s\nПолучено: %2$s</string>
 </resources>

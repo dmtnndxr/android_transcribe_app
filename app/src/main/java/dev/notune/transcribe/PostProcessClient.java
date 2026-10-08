@@ -305,6 +305,63 @@ public final class PostProcessClient {
     }
 
     /**
+     * Lists the model ids the server offers ({@code GET /models}, part of the
+     * OpenAI API and served by OpenRouter, Ollama, LM Studio and llama.cpp),
+     * sorted alphabetically.
+     */
+    public static java.util.List<String> listModels(String baseUrl, String apiKey)
+            throws PostProcessException {
+        HttpURLConnection conn = null;
+        try {
+            conn = (HttpURLConnection) new URL(modelsEndpointFor(baseUrl)).openConnection();
+            conn.setConnectTimeout(CONNECT_TIMEOUT_MS);
+            conn.setReadTimeout(READ_TIMEOUT_MS);
+            conn.setRequestProperty("Accept", "application/json");
+            if (apiKey != null && !apiKey.trim().isEmpty()) {
+                conn.setRequestProperty("Authorization", "Bearer " + apiKey.trim());
+            }
+            int status = conn.getResponseCode();
+            if (status < 200 || status > 299) {
+                throw new PostProcessException(
+                        describeHttpError(status, readAll(conn.getErrorStream())));
+            }
+            return parseModelIds(readAll(conn.getInputStream()));
+        } catch (SocketTimeoutException e) {
+            throw new PostProcessException("the server took too long to respond");
+        } catch (UnknownHostException e) {
+            throw new PostProcessException("can't reach the server (check the URL / network)");
+        } catch (IOException e) {
+            String detail = e.getMessage();
+            throw new PostProcessException(
+                    detail == null || detail.isEmpty() ? "network error" : detail, e);
+        } finally {
+            if (conn != null) conn.disconnect();
+        }
+    }
+
+    /** Model ids from an OpenAI-style {@code {"data":[{"id":…}]}} listing. */
+    static java.util.List<String> parseModelIds(String json) throws PostProcessException {
+        java.util.List<String> ids = new java.util.ArrayList<>();
+        try {
+            JSONArray data = new JSONObject(json).getJSONArray("data");
+            for (int i = 0; i < data.length(); i++) {
+                String id = data.getJSONObject(i).optString("id", "").trim();
+                if (!id.isEmpty() && !ids.contains(id)) ids.add(id);
+            }
+        } catch (JSONException e) {
+            throw new PostProcessException("the server's model list isn't in the expected format");
+        }
+        java.util.Collections.sort(ids, String.CASE_INSENSITIVE_ORDER);
+        return ids;
+    }
+
+    /** The {@code /models} endpoint next to the configured chat endpoint. */
+    static String modelsEndpointFor(String baseUrl) {
+        String chat = endpointFor(baseUrl);
+        return chat.substring(0, chat.length() - "/chat/completions".length()) + "/models";
+    }
+
+    /**
      * Turns a user-supplied base URL into the chat-completions endpoint.
      * Accepts a bare base ("http://host:11434/v1"), a base with a trailing
      * slash, or the full endpoint already spelled out.

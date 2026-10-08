@@ -106,6 +106,7 @@
     <!-- Primary voice-input flow: apps fire RECOGNIZE_SPEECH and RecognizeActivity handles it. -->
     <string name="section_voice">Voice input</string>
     <string name="voice_status_ready">Ready. In any app, tap the microphone on a supported keyboard and your speech is typed into the text field.</string>
+    <string name="voice_status_ready_keyboard">Ready. Switch to the %1$s keyboard in any app and tap its microphone. If your keyboard\'s own mic opens a choice of apps, pick %1$s and “Always”.</string>
     <string name="voice_status_need_mic">Microphone access is needed before voice input can work.</string>
     <string name="voice_status_almost">Almost there. When you tap your keyboard\'s mic, pick “Offline Voice Input” and choose “Always”. Tap “Try voice input” below to set it now.</string>
     <string name="btn_voice_try">Try voice input</string>
@@ -241,6 +242,7 @@
     <string name="history_days_30">30 days</string>
     <string name="history_storage">Recordings use %1$s</string>
     <string name="history_play">Play</string>
+    <string name="history_pause">Pause</string>
     <string name="history_stop">Stop</string>
     <string name="history_copy">Copy</string>
     <string name="history_share">Share</string>
@@ -308,4 +310,24 @@
     <string name="onb_ai_on">AI is on</string>
     <string name="onb_done_title">All set</string>
     <string name="onb_done_body">• Big microphone: dictation, fully offline.\n• Microphone with sparkles: dictation + AI.\n• Wand: edit selected text by voice.\n• Your dictations are kept in History on the home screen.\n\nYou can run this setup again from the home screen.</string>
+    <string name="pp_load_models">Load models from server</string>
+    <string name="pp_models_loading">Loading the model list…</string>
+    <string name="pp_models_need_url">Fill in the base URL first.</string>
+    <string name="pp_models_failed">Couldn\'t load models: %1$s. You can still type a model name.</string>
+    <plurals name="pp_models_loaded">
+        <item quantity="one">%1$d model on the server. Pick one or type any name.</item>
+        <item quantity="other">%1$d models on the server. Pick one or type any name.</item>
+    </plurals>
+    <string name="pp_templates">Templates</string>
+    <string name="pp_template_cleanup">Clean up (default)</string>
+    <string name="pp_template_translate">Translate to %1$s</string>
+    <string name="pp_template_formal">Formal tone</string>
+    <string name="pp_template_bullets">Bullet list</string>
+    <string name="pp_template_applied">Prompt set: %1$s</string>
+    <string name="onb_ai_on_model">AI is on: %1$s</string>
+    <string name="onb_ai_test">Test the connection</string>
+    <string name="onb_ai_change">Change AI settings</string>
+    <string name="onb_ai_try_hint">Try it here: tap “Dictate + AI” on the keyboard</string>
+    <string name="onb_ai_sample">so um i think we should meet on tuesday no wait wednesday afternoon</string>
+    <string name="onb_ai_test_ok">Works.\nSent: %1$s\nGot back: %2$s</string>
 </resources>

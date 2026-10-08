@@ -234,9 +234,24 @@ public class MainActivity extends AppCompatActivity {
 
         if (isOurAppDefaultRecognizer()) {
             setVoiceStatus(true, getString(R.string.voice_status_ready));
+        } else if (isOurKeyboardEnabled()) {
+            // Many keyboards (Gboard, Samsung) never hand their mic to another
+            // app, so the voice keyboard alone is a complete setup.
+            setVoiceStatus(true, getString(R.string.voice_status_ready_keyboard,
+                    getString(R.string.app_name)));
         } else {
             setVoiceStatus(false, getString(R.string.voice_status_almost));
         }
+    }
+
+    private boolean isOurKeyboardEnabled() {
+        android.view.inputmethod.InputMethodManager imm =
+                getSystemService(android.view.inputmethod.InputMethodManager.class);
+        if (imm == null) return false;
+        for (android.view.inputmethod.InputMethodInfo info : imm.getEnabledInputMethodList()) {
+            if (getPackageName().equals(info.getPackageName())) return true;
+        }
+        return false;
     }
 
     /** True if our RecognizeActivity is what RECOGNIZE_SPEECH resolves to. */

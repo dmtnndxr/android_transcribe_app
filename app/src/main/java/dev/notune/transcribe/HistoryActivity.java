@@ -18,6 +18,7 @@ import android.view.ViewGroup;
 import android.widget.CompoundButton;
 import android.widget.EditText;
 import android.widget.RadioGroup;
+import android.widget.SeekBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -51,8 +52,20 @@ public class HistoryActivity extends AppCompatActivity {
     private TextView emptyText;
 
     private MediaPlayer player;
+    /** Entry whose recording is loaded in {@link #player}, playing or paused. */
     private String playingId;
     private String expandedId;
+    private RecyclerView list;
+    private boolean seeking;
+
+    /** Moves the loaded entry's seek bar along while it plays. */
+    private final Runnable progressTick = new Runnable() {
+        @Override
+        public void run() {
+            updateProgress();
+            if (player != null && player.isPlaying()) main.postDelayed(this, 200);
+        }
+    };
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -79,7 +92,7 @@ public class HistoryActivity extends AppCompatActivity {
         statusText = findViewById(R.id.history_status);
         emptyText = findViewById(R.id.history_empty);
 
-        RecyclerView list = findViewById(R.id.history_list);
+        list = findViewById(R.id.history_list);
         list.setLayoutManager(new LinearLayoutManager(this));
         list.setAdapter(adapter);
 
@@ -165,8 +178,15 @@ public class HistoryActivity extends AppCompatActivity {
     }
 
     private void togglePlayback(HistoryStore.Entry e) {
-        if (e.id.equals(playingId)) {
-            stopPlayback();
+        if (e.id.equals(playingId) && player != null) {
+            // Play/pause the loaded recording; the seek bar keeps its place.
+            if (player.isPlaying()) {
+                player.pause();
+            } else {
+                player.start();
+                main.post(progressTick);
+            }
+            refreshEntry(e.id);
             return;
         }
         stopPlayback();
@@ -186,18 +206,39 @@ public class HistoryActivity extends AppCompatActivity {
         }
         player = mp;
         playingId = e.id;
-        adapter.notifyDataSetChanged();
+        refreshEntry(e.id);
+        main.post(progressTick);
     }
 
     private void stopPlayback() {
+        main.removeCallbacks(progressTick);
         if (player != null) {
             player.release();
             player = null;
         }
         if (playingId != null) {
+            String id = playingId;
             playingId = null;
-            adapter.notifyDataSetChanged();
+            refreshEntry(id);
         }
+    }
+
+    /** Rebinds one card instead of the whole list, so buttons don't flicker. */
+    private void refreshEntry(String id) {
+        int pos = adapter.indexOf(id);
+        if (pos >= 0) adapter.notifyItemChanged(pos);
+    }
+
+    private void updateProgress() {
+        if (player == null || playingId == null || seeking) return;
+        int pos = adapter.indexOf(playingId);
+        RecyclerView.ViewHolder vh = pos >= 0 ? list.findViewHolderForAdapterPosition(pos) : null;
+        if (vh instanceof Holder) ((Holder) vh).showProgress(player.getCurrentPosition(),
+                player.getDuration());
+    }
+
+    private static String clock(int ms) {
+        return DateUtils.formatElapsedTime(Math.max(0, ms) / 1000);
     }
 
     private void confirmClear() {
@@ -283,6 +324,13 @@ public class HistoryActivity extends AppCompatActivity {
     private class Adapter extends RecyclerView.Adapter<Holder> {
         private List<HistoryStore.Entry> entries = new ArrayList<>();
 
+        int indexOf(String id) {
+            for (int i = 0; i < entries.size(); i++) {
+                if (entries.get(i).id.equals(id)) return i;
+            }
+            return -1;
+        }
+
         void setEntries(List<HistoryStore.Entry> entries) {
             this.entries = entries;
             notifyDataSetChanged();
@@ -311,6 +359,9 @@ public class HistoryActivity extends AppCompatActivity {
         final TextView details;
         final View actions;
         final MaterialButton play;
+        final View seekRow;
+        final SeekBar seek;
+        final TextView time;
 
         Holder(View v) {
             super(v);
@@ -319,11 +370,33 @@ public class HistoryActivity extends AppCompatActivity {
             details = v.findViewById(R.id.history_details);
             actions = v.findViewById(R.id.history_actions);
             play = v.findViewById(R.id.history_play);
+            seekRow = v.findViewById(R.id.history_seek_row);
+            seek = v.findViewById(R.id.history_seek);
+            time = v.findViewById(R.id.history_time);
+            seek.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+                @Override
+                public void onProgressChanged(SeekBar bar, int progress, boolean fromUser) {
+                    if (fromUser) time.setText(clock(progress) + " / " + clock(bar.getMax()));
+                }
+                @Override
+                public void onStartTrackingTouch(SeekBar bar) { seeking = true; }
+                @Override
+                public void onStopTrackingTouch(SeekBar bar) {
+                    seeking = false;
+                    if (player != null) player.seekTo(bar.getProgress());
+                }
+            });
             for (int id : new int[]{R.id.history_play, R.id.history_copy,
                     R.id.history_share, R.id.history_delete}) {
                 View b = v.findViewById(id);
                 TooltipCompat.setTooltipText(b, b.getContentDescription());
             }
+        }
+
+        void showProgress(int positionMs, int durationMs) {
+            seek.setMax(Math.max(1, durationMs));
+            seek.setProgress(positionMs);
+            time.setText(clock(positionMs) + " / " + clock(durationMs));
         }
 
         void bind(HistoryStore.Entry e) {
@@ -365,9 +438,12 @@ public class HistoryActivity extends AppCompatActivity {
 
             File audio = HistoryStore.audioFile(itemView.getContext(), e);
             play.setVisibility(audio != null && audio.exists() ? View.VISIBLE : View.GONE);
-            boolean playing = e.id.equals(playingId);
-            play.setIconResource(playing ? R.drawable.ic_stop : R.drawable.ic_play);
-            play.setContentDescription(getString(playing ? R.string.history_stop : R.string.history_play));
+            boolean loaded = e.id.equals(playingId) && player != null;
+            boolean playing = loaded && player.isPlaying();
+            play.setIconResource(playing ? R.drawable.ic_pause : R.drawable.ic_play);
+            play.setContentDescription(getString(playing ? R.string.history_pause : R.string.history_play));
+            seekRow.setVisibility(loaded && expanded ? View.VISIBLE : View.GONE);
+            if (loaded) showProgress(player.getCurrentPosition(), player.getDuration());
             TooltipCompat.setTooltipText(play, play.getContentDescription());
 
             View.OnClickListener toggle = v -> {

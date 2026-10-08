@@ -68,6 +68,37 @@ class PostProcessClientTest {
         }
     }
 
+    @Nested
+    @DisplayName("model list")
+    class ModelList {
+
+        @Test
+        @DisplayName("finds /models next to the chat endpoint")
+        void endpoint() {
+            assertAll(
+                    () -> assertEquals("https://openrouter.ai/api/v1/models",
+                            PostProcessClient.modelsEndpointFor("https://openrouter.ai/api/v1/")),
+                    () -> assertEquals("http://h/v1/models",
+                            PostProcessClient.modelsEndpointFor("http://h/v1/chat/completions")));
+        }
+
+        @Test
+        @DisplayName("reads ids, drops blanks and duplicates, sorts them")
+        void parses() throws Exception {
+            String json = "{\"data\":[{\"id\":\"z-model\"},{\"id\":\"\"},"
+                    + "{\"id\":\"A-model\"},{\"id\":\"z-model\"},{\"object\":\"model\"}]}";
+            assertEquals(java.util.Arrays.asList("A-model", "z-model"),
+                    PostProcessClient.parseModelIds(json));
+        }
+
+        @Test
+        @DisplayName("rejects a reply without a data array")
+        void rejectsOtherShapes() {
+            assertThrows(PostProcessClient.PostProcessException.class,
+                    () -> PostProcessClient.parseModelIds("{\"models\":[]}"));
+        }
+    }
+
     // ------------------------------------------------------------ Request
 
     @Nested

@@ -112,6 +112,13 @@ public class RustInputMethodService extends InputMethodService {
     // framework in onStartInput/onUpdateSelection. Kept here so the wand's
     // state never needs a blocking round-trip to the editor.
     private boolean selectionNonEmpty = false;
+    /**
+     * Last selection the editor reported, in absolute offsets (-1 = unknown).
+     * Used when an editor doesn't support getExtractedText, e.g. Telegram's
+     * expanded message field.
+     */
+    private int lastSelStart = -1;
+    private int lastSelEnd = -1;
     // Whether the keyboard window is currently on screen. Some frameworks
     // (notably OEM builds) call onWindowShown again for events that don't
     // follow an onWindowHidden, e.g. tapping the text area to move the
@@ -408,6 +415,8 @@ public class RustInputMethodService extends InputMethodService {
         selectionNonEmpty = attribute != null
                 && attribute.initialSelStart >= 0
                 && attribute.initialSelStart != attribute.initialSelEnd;
+        lastSelStart = attribute != null ? attribute.initialSelStart : -1;
+        lastSelEnd = attribute != null ? attribute.initialSelEnd : -1;
     }
 
     @Override
@@ -429,6 +438,13 @@ public class RustInputMethodService extends InputMethodService {
         // A field is focused and the input connection is live again — commit any
         // text that finished transcribing while nothing was focused.
         flushPendingText();
+        if (!selectionNonEmpty) {
+            // Some editors don't report the selection they had when the
+            // keyboard opened; ask once instead of on every cursor move.
+            InputConnection ic = getCurrentInputConnection();
+            CharSequence selected = ic != null ? ic.getSelectedText(0) : null;
+            selectionNonEmpty = selected != null && selected.length() > 0;
+        }
         applyMicEnabledState();
     }
 
@@ -439,6 +455,8 @@ public class RustInputMethodService extends InputMethodService {
         clearUndo();
         inputActive = false;
         selectionNonEmpty = false;
+        lastSelStart = -1;
+        lastSelEnd = -1;
     }
 
     @Override
@@ -447,6 +465,8 @@ public class RustInputMethodService extends InputMethodService {
                                   int candidatesStart, int candidatesEnd) {
         super.onUpdateSelection(oldSelStart, oldSelEnd, newSelStart, newSelEnd,
                 candidatesStart, candidatesEnd);
+        lastSelStart = newSelStart;
+        lastSelEnd = newSelEnd;
         boolean nonEmpty = newSelStart >= 0 && newSelStart != newSelEnd;
         if (nonEmpty != selectionNonEmpty) {
             selectionNonEmpty = nonEmpty;
@@ -1259,13 +1279,21 @@ public class RustInputMethodService extends InputMethodService {
     private SelectionSnapshot captureSelection(InputConnection ic, boolean requireNonEmpty) {
         if (ic == null || !inputActive) return null;
         ExtractedText extracted = ic.getExtractedText(new ExtractedTextRequest(), 0);
-        if (extracted == null || extracted.selectionStart < 0 || extracted.selectionEnd < 0) {
+        int start;
+        int end;
+        if (extracted != null && extracted.selectionStart >= 0 && extracted.selectionEnd >= 0) {
+            start = extracted.startOffset
+                    + Math.min(extracted.selectionStart, extracted.selectionEnd);
+            end = extracted.startOffset
+                    + Math.max(extracted.selectionStart, extracted.selectionEnd);
+        } else if (lastSelStart >= 0 && lastSelEnd >= 0) {
+            // No extracted text (Telegram's expanded field): fall back to the
+            // range from onUpdateSelection.
+            start = Math.min(lastSelStart, lastSelEnd);
+            end = Math.max(lastSelStart, lastSelEnd);
+        } else {
             return null;
         }
-        int start = extracted.startOffset
-                + Math.min(extracted.selectionStart, extracted.selectionEnd);
-        int end = extracted.startOffset
-                + Math.max(extracted.selectionStart, extracted.selectionEnd);
         CharSequence selected = ic.getSelectedText(0);
         String text = selected == null ? "" : selected.toString();
         if (requireNonEmpty && (start == end || text.isEmpty())) return null;
@@ -1274,7 +1302,13 @@ public class RustInputMethodService extends InputMethodService {
 
     private String textInRange(InputConnection ic, int start, int end) {
         ExtractedText extracted = ic.getExtractedText(new ExtractedTextRequest(), 0);
-        if (extracted == null || extracted.text == null) return null;
+        if (extracted == null || extracted.text == null) {
+            // Without extracted text, read the range relative to the cursor,
+            // which sits at its end right after our commit.
+            if (lastSelStart != end || lastSelEnd != end) return null;
+            CharSequence before = ic.getTextBeforeCursor(end - start, 0);
+            return before == null ? null : before.toString();
+        }
         int localStart = start - extracted.startOffset;
         int localEnd = end - extracted.startOffset;
         if (localStart < 0 || localEnd < localStart || localEnd > extracted.text.length()) {
