@@ -250,6 +250,16 @@ pub fn start_recording(
             state.stream = Some(SendStream(s));
             notify_status(&mut env, state.target_ref.as_obj(), "Listening...");
 
+            // Settings changed in the app since this process loaded the
+            // model: reload while the user speaks rather than after.
+            if engine::is_engine_loaded() && !engine::is_current() {
+                let jvm = state.jvm.clone();
+                let target_ref = state.target_ref.clone();
+                std::thread::spawn(move || {
+                    let _ = engine::ensure_loaded_from_thread(&jvm, &target_ref);
+                });
+            }
+
             if let Some(ep) = endpoint {
                 let jvm = state.jvm.clone();
                 let target_ref = state.target_ref.clone();
@@ -303,6 +313,10 @@ pub fn start_recording(
 /// `try_lock` so a start never blocks the caller's (UI) thread: an engine
 /// still busy with the previous dictation just means this one runs offline.
 fn start_stream(state: &mut VoiceSessionState) {
+    // With changed settings, transcribe after stop on the reloaded engine.
+    if !engine::is_current() {
+        return;
+    }
     let Some(eng) = engine::get_engine() else { return };
     let streaming = match eng.try_lock() {
         Ok(e) => e.supports_streaming(),
@@ -425,8 +439,9 @@ pub fn stop_recording(mut env: JNIEnv, state: &mut VoiceSessionState) {
             }
         }
 
-        // Wait for engine if somehow still loading
-        if engine::get_engine().is_none() {
+        // Wait for the engine if it is still loading, or reload it if the
+        // model settings changed since it was loaded.
+        if !engine::is_current() {
             if let Err(_) = engine::ensure_loaded(&mut env, obj) {
                 return;
             }
