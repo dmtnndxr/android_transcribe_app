@@ -11,6 +11,7 @@ import android.widget.TextView;
 import android.widget.ProgressBar;
 import android.view.Gravity;
 import android.os.Handler;
+import android.os.IBinder;
 import android.os.Looper;
 import android.util.Log;
 import android.util.TypedValue;
@@ -247,7 +248,7 @@ public class RustInputMethodService extends InputMethodService {
                     pendingSwitchBack = true;
                     finishCapture();
                 } else {
-                    switchToPreviousInputMethod();
+                    switchAwayFromVoiceKeyboard();
                 }
             });
 
@@ -381,6 +382,56 @@ public class RustInputMethodService extends InputMethodService {
             audioPauser.abandon(this);
             pauseAudioActive = false;
         }
+    }
+
+    /**
+     * Leaves the voice keyboard. There is no previous keyboard when ours was
+     * picked in the system settings (common on Android TV) or after the input
+     * method history was reset; then fall back to the next enabled keyboard,
+     * and finally to the system picker, so the button never does nothing.
+     */
+    private void switchAwayFromVoiceKeyboard() {
+        if (switchToLastKeyboard() || switchToNextKeyboard()) return;
+        InputMethodManager imm = (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
+        if (imm != null) imm.showInputMethodPicker();
+    }
+
+    // InputMethodService#switchToPreviousInputMethod / #switchToNextInputMethod
+    // only exist since API 28; older versions take the window token.
+    @SuppressWarnings("deprecation")
+    private boolean switchToLastKeyboard() {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                return switchToPreviousInputMethod();
+            }
+            IBinder token = imeWindowToken();
+            InputMethodManager imm = (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
+            return token != null && imm != null && imm.switchToLastInputMethod(token);
+        } catch (RuntimeException e) {
+            Log.w(TAG, "switching to the previous keyboard failed", e);
+            return false;
+        }
+    }
+
+    @SuppressWarnings("deprecation")
+    private boolean switchToNextKeyboard() {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                return switchToNextInputMethod(false);
+            }
+            IBinder token = imeWindowToken();
+            InputMethodManager imm = (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
+            return token != null && imm != null && imm.switchToNextInputMethod(token, false);
+        } catch (RuntimeException e) {
+            Log.w(TAG, "switching to the next keyboard failed", e);
+            return false;
+        }
+    }
+
+    private IBinder imeWindowToken() {
+        android.app.Dialog window = getWindow();
+        if (window == null || window.getWindow() == null) return null;
+        return window.getWindow().getAttributes().token;
     }
 
     @Override
@@ -901,7 +952,7 @@ public class RustInputMethodService extends InputMethodService {
             updateUiState();
             if (pendingSwitchBack && status.startsWith("Error")) {
                 pendingSwitchBack = false;
-                switchToPreviousInputMethod();
+                switchAwayFromVoiceKeyboard();
             }
             if (status != null && status.startsWith("Error")) {
                 releaseAudioFocus();
@@ -1000,7 +1051,7 @@ public class RustInputMethodService extends InputMethodService {
                 releaseAudioFocus();
                 if (pendingSwitchBack) {
                     pendingSwitchBack = false;
-                    switchToPreviousInputMethod();
+                    switchAwayFromVoiceKeyboard();
                 }
                 return;
             }
@@ -1168,7 +1219,7 @@ public class RustInputMethodService extends InputMethodService {
         DoneHaptics.play(this);
         if (pendingSwitchBack) {
             pendingSwitchBack = false;
-            switchToPreviousInputMethod();
+            switchAwayFromVoiceKeyboard();
         }
     }
 
@@ -1399,7 +1450,7 @@ public class RustInputMethodService extends InputMethodService {
         // rather than in deliverText; cancel paths clear the flag first.
         if (pendingSwitchBack) {
             pendingSwitchBack = false;
-            switchToPreviousInputMethod();
+            switchAwayFromVoiceKeyboard();
         }
     }
 
