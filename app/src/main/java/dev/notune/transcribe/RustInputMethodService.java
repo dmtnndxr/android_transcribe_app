@@ -528,7 +528,12 @@ public class RustInputMethodService extends InputMethodService {
         // (long-lived) IME process stayed alive, so it matches the app setting.
         if (inputView != null
                 && ThemePrefs.isNight(ThemePrefs.wrapForNight(this, ThemePrefs.getMode(this))) != viewIsNight) {
-            setInputView(onCreateInputView());
+            View rebuilt = onCreateInputView();
+            setInputView(rebuilt);
+            // The window already dispatched its insets to the old view; ask
+            // for a new pass so the replacement gets its navigation-bar
+            // padding (otherwise the bottom key row is cut off).
+            rebuilt.requestApplyInsets();
         }
         // Post-processing may have been switched on or off in the app since this
         // (long-lived) IME process last inflated its view.
