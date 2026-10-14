@@ -17,6 +17,7 @@ pub unsafe extern "system" fn Java_dev_notune_transcribe_RustInputMethodService_
     *IME_STATE.lock().unwrap() = Some(state);
 }
 
+/// Only clears the session if it belongs to `service` (see recognize.rs).
 #[no_mangle]
 pub unsafe extern "system" fn Java_dev_notune_transcribe_RustInputMethodService_cleanupNative(
     env: JNIEnv,
