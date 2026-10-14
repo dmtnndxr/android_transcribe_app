@@ -144,6 +144,8 @@ public class VoiceRecognitionService extends RecognitionService {
             hypotheses.add(text);
             Bundle bundle = new Bundle();
             bundle.putStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION, hypotheses);
+            // Some clients drop results without a score per hypothesis.
+            bundle.putFloatArray(SpeechRecognizer.CONFIDENCE_SCORES, new float[]{1.0f});
             try {
                 cb.results(bundle);
                 HistoryStore.finish(this, historyId, null, null, HistoryStore.OUTCOME_INSERTED, null);
