@@ -151,13 +151,7 @@ public class RustInputMethodService extends InputMethodService {
         public void onReceive(Context context, Intent intent) {
             if (!capturing) return;
             DebugLog.event(RustInputMethodService.this, "stop tapped in notification");
-            transcriptionPending = true;
-            stopCapture();
-            if (pauseAudioActive) {
-                audioPauser.abandon(RustInputMethodService.this);
-                pauseAudioActive = false;
-            }
-            updateRecordButtonUI(false);
+            finishCapture();
         }
     };
     // Transcribed text that finished while its field wasn't focused (and,
@@ -251,9 +245,7 @@ public class RustInputMethodService extends InputMethodService {
             switchKeyboardButton.setOnClickListener(v -> {
                 if (isRecording) {
                     pendingSwitchBack = true;
-                    transcriptionPending = true;
-                    stopCapture();
-                    updateRecordButtonUI(false);
+                    finishCapture();
                 } else {
                     switchToPreviousInputMethod();
                 }
@@ -372,6 +364,25 @@ public class RustInputMethodService extends InputMethodService {
         }
     }
 
+    /**
+     * Stops capture and hands the audio to transcription. Audio focus is
+     * released right away, so paused media can resume while the (possibly
+     * long) transcription runs.
+     */
+    private void finishCapture() {
+        transcriptionPending = true;
+        stopCapture();
+        releaseAudioFocus();
+        updateRecordButtonUI(false);
+    }
+
+    private void releaseAudioFocus() {
+        if (pauseAudioActive) {
+            audioPauser.abandon(this);
+            pauseAudioActive = false;
+        }
+    }
+
     @Override
     public void onWindowShown() {
         super.onWindowShown();
@@ -442,10 +453,7 @@ public class RustInputMethodService extends InputMethodService {
                 return;
             }
         }
-        if (pauseAudioActive) {
-            audioPauser.abandon(this);
-            pauseAudioActive = false;
-        }
+        releaseAudioFocus();
     }
 
     @Override
@@ -526,13 +534,7 @@ public class RustInputMethodService extends InputMethodService {
         if (isRecording) {
             // Stopping from a sibling button must not silently change the mode
             // chosen when capture began (especially selection editing).
-            transcriptionPending = true;
-            stopCapture();
-            if (pauseAudioActive) {
-                audioPauser.abandon(this);
-                pauseAudioActive = false;
-            }
-            updateRecordButtonUI(false);
+            finishCapture();
             return;
         }
 
@@ -847,10 +849,7 @@ public class RustInputMethodService extends InputMethodService {
         unregisterReceiver(stopReceiver);
         RecordingNotification.stop(this);
         cleanupNative(this);
-        if (pauseAudioActive) {
-            audioPauser.abandon(this);
-            pauseAudioActive = false;
-        }
+        releaseAudioFocus();
     }
 
     // Native methods
@@ -904,9 +903,8 @@ public class RustInputMethodService extends InputMethodService {
                 pendingSwitchBack = false;
                 switchToPreviousInputMethod();
             }
-            if (pauseAudioActive && status != null && status.startsWith("Error")) {
-                audioPauser.abandon(this);
-                pauseAudioActive = false;
+            if (status != null && status.startsWith("Error")) {
+                releaseAudioFocus();
             }
         });
     }
@@ -999,10 +997,7 @@ public class RustInputMethodService extends InputMethodService {
                 RecordingNotification.stop(this);
                 updateRecordButtonUI(false);
                 if (statusView != null) statusView.setText("Tap to Record");
-                if (pauseAudioActive) {
-                    audioPauser.abandon(this);
-                    pauseAudioActive = false;
-                }
+                releaseAudioFocus();
                 if (pendingSwitchBack) {
                     pendingSwitchBack = false;
                     switchToPreviousInputMethod();
@@ -1061,10 +1056,7 @@ public class RustInputMethodService extends InputMethodService {
         updateRecordButtonUI(false);
         // Recording is over, so hand audio focus back now instead of making the
         // user's music wait out the network round-trip.
-        if (pauseAudioActive) {
-            audioPauser.abandon(this);
-            pauseAudioActive = false;
-        }
+        releaseAudioFocus();
         if (statusView != null) statusView.setText(R.string.ime_ai_working);
         if (hintView != null) hintView.setText(R.string.ime_ai_working_hint);
         applyMicEnabledState();
@@ -1099,10 +1091,7 @@ public class RustInputMethodService extends InputMethodService {
         cancelRequested = false;
         final long requestGeneration = ++llmGeneration;
         updateRecordButtonUI(false);
-        if (pauseAudioActive) {
-            audioPauser.abandon(this);
-            pauseAudioActive = false;
-        }
+        releaseAudioFocus();
         if (statusView != null) statusView.setText(R.string.ime_edit_working);
         if (hintView != null) hintView.setText(R.string.ime_edit_working_hint);
         applyMicEnabledState();
@@ -1170,10 +1159,7 @@ public class RustInputMethodService extends InputMethodService {
         }
         RecordingNotification.stop(this);
         DebugLog.event(this, "delivered: toField=" + toField);
-        if (pauseAudioActive) {
-            audioPauser.abandon(this);
-            pauseAudioActive = false;
-        }
+        releaseAudioFocus();
         updateRecordButtonUI(false);
         if (statusView != null) {
             statusView.setText(statusMessage != null
@@ -1283,10 +1269,7 @@ public class RustInputMethodService extends InputMethodService {
             discardNextTranscription = fellBackToTranscription;
             transcriptionPending = fellBackToTranscription;
             cancelRequested = fellBackToTranscription;
-            if (pauseAudioActive) {
-                audioPauser.abandon(this);
-                pauseAudioActive = false;
-            }
+            releaseAudioFocus();
             isRecording = false;
             if (inputView != null) inputView.setKeepScreenOn(false);
             tintRecordButton(false);
