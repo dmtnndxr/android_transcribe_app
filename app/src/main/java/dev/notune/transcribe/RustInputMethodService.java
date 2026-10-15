@@ -1071,7 +1071,7 @@ public class RustInputMethodService extends InputMethodService {
                 }
                 RecordingNotification.stop(this);
                 updateRecordButtonUI(false);
-                if (statusView != null) statusView.setText(R.string.ime_tap_to_record);
+                if (statusView != null) statusView.setText(R.string.voice_no_speech);
                 releaseAudioFocus();
                 if (pendingSwitchBack) {
                     pendingSwitchBack = false;
