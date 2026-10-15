@@ -512,12 +512,24 @@ public class RustInputMethodService extends InputMethodService {
         super.onStartInput(attribute, restarting);
         editorGeneration++;
         clearUndo();
-        inputActive = true;
+        inputActive = isTextEditor(attribute);
         selectionNonEmpty = attribute != null
                 && attribute.initialSelStart >= 0
                 && attribute.initialSelStart != attribute.initialSelEnd;
         lastSelStart = attribute != null ? attribute.initialSelStart : -1;
         lastSelEnd = attribute != null ? attribute.initialSelEnd : -1;
+    }
+
+    /**
+     * Since Android 11 the keyboard also gets onStartInput for windows without
+     * any text field (e.g. the launcher after pressing Home, or a browser
+     * between page focus changes), with a placeholder EditorInfo. Text
+     * committed there is silently lost, so it doesn't count as an editor.
+     * Terminal-style views that really use TYPE_NULL still have a view id.
+     */
+    private static boolean isTextEditor(EditorInfo info) {
+        return info != null && !(info.inputType == android.text.InputType.TYPE_NULL
+                && info.initialSelStart < 0 && info.fieldId == 0);
     }
 
     @Override
