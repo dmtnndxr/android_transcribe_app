@@ -797,11 +797,12 @@ public class RustInputMethodService extends InputMethodService {
      * since either one can stop it (see {@link #onMicTap}).
      */
     private void applyMicEnabledState() {
+        // After an error the mics stay usable: most errors are transient (no
+        // audio, storage was full, mic busy), and the next attempt retries.
         boolean busy = postProcessRunning || transcriptionPending
                 || lastStatus.contains("Transcribing")
                 || lastStatus.contains("Processing")
-                || lastStatus.contains("Waiting")
-                || lastStatus.startsWith("Error");
+                || lastStatus.contains("Waiting");
 
         boolean mainEnabled = !busy;
         boolean aiEnabled = !busy;
@@ -1007,7 +1008,7 @@ public class RustInputMethodService extends InputMethodService {
             progressBar.setVisibility(View.GONE);
         }
 
-        // Disable the mics during transcription/processing/waiting or fatal errors
+        // Disable the mics only while busy (see applyMicEnabledState).
         applyMicEnabledState();
 
         if (hintView != null && !isRecording && !postProcessRunning && !cancelRequested) {
