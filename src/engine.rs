@@ -374,6 +374,29 @@ pub fn get_engine() -> Option<Arc<Mutex<Engine>>> {
     GLOBAL_ENGINE.lock().unwrap().clone()
 }
 
+/// [`transcribe_shared`] for a recording or file: long quiet stretches
+/// before and after the speech are left out (see
+/// [`crate::endpoint::speech_range`]).
+pub fn transcribe_speech(engine: &Arc<Mutex<Engine>>, samples: Vec<f32>) -> Result<String, String> {
+    let speech = crate::endpoint::speech_range(&samples);
+    if speech.is_empty() {
+        log::info!("only digital silence recorded; nothing to transcribe");
+        return Ok(String::new());
+    }
+    let samples = if speech.len() < samples.len() {
+        log::info!(
+            "transcribing {:.1}-{:.1}s of {:.1}s (quiet start/end left out)",
+            speech.start as f64 / 16_000.0,
+            speech.end as f64 / 16_000.0,
+            samples.len() as f64 / 16_000.0
+        );
+        samples[speech].to_vec()
+    } else {
+        samples
+    };
+    transcribe_shared(engine, samples)
+}
+
 /// Runs a transcription on the shared engine. Two layers of hardening keep a
 /// single bad run from freezing every later one (the symptom would be an IME
 /// stuck at "Processing" until its process dies, since notify callbacks stop
