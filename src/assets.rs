@@ -79,12 +79,13 @@ pub fn extract_builtin_model(env: &mut JNIEnv, context: &JObject) -> anyhow::Res
     }
     std::fs::create_dir_all(&tmp_root)?;
 
-    copy_assets_recursively(env, &asset_manager_obj, BUILTIN_MODEL_DIR, &tmp_root)?;
-
-    // Only mark (and publish) the extraction if the model actually arrived.
-    let tmp_model_dir = tmp_root.join(BUILTIN_MODEL_DIR);
-    find_gguf(&tmp_model_dir)?;
-    std::fs::write(tmp_model_dir.join(EXTRACTION_COMPLETE_MARKER), &bundled)?;
+    // Don't leave a partial copy (hundreds of MB) behind if this fails, e.g.
+    // because storage is full.
+    let extracted = extract_into(env, &asset_manager_obj, &tmp_root, &bundled);
+    if extracted.is_err() {
+        let _ = std::fs::remove_dir_all(&tmp_root);
+    }
+    let tmp_model_dir = extracted?;
 
     if model_dir.exists() {
         log::info!("Replacing incomplete or outdated model directory");
@@ -95,6 +96,23 @@ pub fn extract_builtin_model(env: &mut JNIEnv, context: &JObject) -> anyhow::Res
     log::info!("Asset extraction complete");
 
     find_gguf(&model_dir)
+}
+
+/// Copies the bundled model into `tmp_root` and marks it complete with the
+/// names in `bundled`; returns the model directory inside it.
+fn extract_into(
+    env: &mut JNIEnv,
+    asset_manager: &JObject,
+    tmp_root: &Path,
+    bundled: &str,
+) -> anyhow::Result<PathBuf> {
+    copy_assets_recursively(env, asset_manager, BUILTIN_MODEL_DIR, tmp_root)?;
+
+    // Only mark (and publish) the extraction if the model actually arrived.
+    let tmp_model_dir = tmp_root.join(BUILTIN_MODEL_DIR);
+    find_gguf(&tmp_model_dir)?;
+    std::fs::write(tmp_model_dir.join(EXTRACTION_COMPLETE_MARKER), bundled)?;
+    Ok(tmp_model_dir)
 }
 
 /// Lock file in filesDir serializing extraction across processes.
