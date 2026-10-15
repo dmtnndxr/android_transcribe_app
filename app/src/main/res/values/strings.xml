@@ -343,4 +343,37 @@
     <string name="history_no_text">No text, only the recording</string>
     <string name="btn_share_log">Share debug log</string>
     <string name="desc_share_log">If dictation misbehaves, share the debug log. It has times, errors and your phone model, but no dictated text, audio or keys.</string>
+
+    <!-- Voice panel, keyboard, file transcription and live subtitles -->
+    <string name="voice_listening">Listening… (tap to stop)</string>
+    <string name="voice_processing">Processing…</string>
+    <string name="voice_need_mic">Microphone permission required.\nGrant it in the main app.</string>
+    <string name="ime_tap_to_record">Tap to record</string>
+    <string name="ime_tap_to_stop">Tap to stop</string>
+    <string name="ime_listening">Listening…</string>
+    <string name="ime_need_mic">No microphone permission</string>
+    <string name="ime_need_mic_hint">Open the app to grant it</string>
+    <string name="ime_switch_keyboard">Switch keyboard</string>
+    <string name="ime_space">Space</string>
+    <string name="ime_enter">Enter</string>
+    <string name="ime_backspace">Backspace</string>
+    <string name="action_close">Close</string>
+    <string name="file_preparing">Preparing…</string>
+    <string name="file_decoding">Decoding audio…</string>
+    <string name="file_transcribing">Transcribing…</string>
+    <string name="file_transcribing_progress">Transcribing… %1$s / %2$s</string>
+    <string name="file_transcribing_at">Transcribing… %1$s</string>
+    <string name="file_copy">Copy to clipboard</string>
+    <string name="file_copied">Copied to clipboard</string>
+    <string name="file_copied_auto">Transcription copied to clipboard</string>
+    <string name="file_no_audio">No audio file received</string>
+    <string name="file_decode_error">Could not decode this audio file</string>
+    <string name="file_no_speech">No speech recognized in this file</string>
+    <string name="subs_waiting">Waiting for audio…</string>
+    <string name="subs_notification_title">Live subtitles active</string>
+    <string name="subs_notification_text">Captioning audio played on this device</string>
+    <string name="subs_stop">Stop</string>
+    <string name="subs_grant_overlay">Please allow “Display over other apps”</string>
+    <string name="subs_overlay_required">Live subtitles need the “Display over other apps” permission</string>
+    <string name="subs_capture_denied">Screen capture was denied</string>
 </resources>

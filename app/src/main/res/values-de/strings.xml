@@ -118,4 +118,37 @@
     <string name="history_no_text">Kein Text, nur die Aufnahme</string>
     <string name="btn_share_log">Debug-Protokoll teilen</string>
     <string name="desc_share_log">Wenn das Diktat nicht richtig funktioniert, teilen Sie das Protokoll. Es enthält Zeiten, Fehler und Ihr Telefonmodell, aber keinen diktierten Text, kein Audio und keine Schlüssel.</string>
+
+    <!-- Voice panel, keyboard, file transcription and live subtitles -->
+    <string name="voice_listening">Ich höre zu… (zum Beenden tippen)</string>
+    <string name="voice_processing">Wird verarbeitet…</string>
+    <string name="voice_need_mic">Mikrofonberechtigung erforderlich.\nErteile sie in der App.</string>
+    <string name="ime_tap_to_record">Zum Aufnehmen tippen</string>
+    <string name="ime_tap_to_stop">Zum Beenden tippen</string>
+    <string name="ime_listening">Ich höre zu…</string>
+    <string name="ime_need_mic">Keine Mikrofonberechtigung</string>
+    <string name="ime_need_mic_hint">Öffne die App, um sie zu erteilen</string>
+    <string name="ime_switch_keyboard">Tastatur wechseln</string>
+    <string name="ime_space">Leerzeichen</string>
+    <string name="ime_enter">Eingabe</string>
+    <string name="ime_backspace">Rücktaste</string>
+    <string name="action_close">Schließen</string>
+    <string name="file_preparing">Wird vorbereitet…</string>
+    <string name="file_decoding">Audio wird dekodiert…</string>
+    <string name="file_transcribing">Wird transkribiert…</string>
+    <string name="file_transcribing_progress">Wird transkribiert… %1$s / %2$s</string>
+    <string name="file_transcribing_at">Wird transkribiert… %1$s</string>
+    <string name="file_copy">In die Zwischenablage kopieren</string>
+    <string name="file_copied">In die Zwischenablage kopiert</string>
+    <string name="file_copied_auto">Transkript in die Zwischenablage kopiert</string>
+    <string name="file_no_audio">Keine Audiodatei erhalten</string>
+    <string name="file_decode_error">Diese Audiodatei konnte nicht dekodiert werden</string>
+    <string name="file_no_speech">In dieser Datei wurde keine Sprache erkannt</string>
+    <string name="subs_waiting">Warte auf Audio…</string>
+    <string name="subs_notification_title">Live-Untertitel aktiv</string>
+    <string name="subs_notification_text">Untertitelt den Ton, der auf diesem Gerät abgespielt wird</string>
+    <string name="subs_stop">Beenden</string>
+    <string name="subs_grant_overlay">Bitte erlaube „Über anderen Apps einblenden“</string>
+    <string name="subs_overlay_required">Live-Untertitel benötigen die Berechtigung „Über anderen Apps einblenden“</string>
+    <string name="subs_capture_denied">Bildschirmaufnahme wurde abgelehnt</string>
 </resources>

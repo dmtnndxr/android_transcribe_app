@@ -312,4 +312,37 @@
     <string name="history_no_text">Текста нет, только запись</string>
     <string name="btn_share_log">Поделиться журналом отладки</string>
     <string name="desc_share_log">Если диктовка работает неправильно, поделитесь журналом. В нём время событий, ошибки и модель телефона, но нет текста диктовок, звука и ключей.</string>
+
+    <!-- Voice panel, keyboard, file transcription and live subtitles -->
+    <string name="voice_listening">Слушаю… (нажмите, чтобы остановить)</string>
+    <string name="voice_processing">Обработка…</string>
+    <string name="voice_need_mic">Нужно разрешение на микрофон.\nВыдайте его в приложении.</string>
+    <string name="ime_tap_to_record">Нажмите для записи</string>
+    <string name="ime_tap_to_stop">Нажмите, чтобы остановить</string>
+    <string name="ime_listening">Слушаю…</string>
+    <string name="ime_need_mic">Нет разрешения на микрофон</string>
+    <string name="ime_need_mic_hint">Откройте приложение, чтобы выдать его</string>
+    <string name="ime_switch_keyboard">Сменить клавиатуру</string>
+    <string name="ime_space">Пробел</string>
+    <string name="ime_enter">Ввод</string>
+    <string name="ime_backspace">Удалить</string>
+    <string name="action_close">Закрыть</string>
+    <string name="file_preparing">Подготовка…</string>
+    <string name="file_decoding">Декодирование аудио…</string>
+    <string name="file_transcribing">Распознавание…</string>
+    <string name="file_transcribing_progress">Распознавание… %1$s / %2$s</string>
+    <string name="file_transcribing_at">Распознавание… %1$s</string>
+    <string name="file_copy">Скопировать в буфер обмена</string>
+    <string name="file_copied">Скопировано в буфер обмена</string>
+    <string name="file_copied_auto">Текст скопирован в буфер обмена</string>
+    <string name="file_no_audio">Аудиофайл не получен</string>
+    <string name="file_decode_error">Не удалось декодировать этот аудиофайл</string>
+    <string name="file_no_speech">В этом файле речь не распознана</string>
+    <string name="subs_waiting">Ожидание звука…</string>
+    <string name="subs_notification_title">Живые субтитры включены</string>
+    <string name="subs_notification_text">Субтитры для звука на этом устройстве</string>
+    <string name="subs_stop">Остановить</string>
+    <string name="subs_grant_overlay">Разрешите «Поверх других приложений»</string>
+    <string name="subs_overlay_required">Для живых субтитров нужно разрешение «Поверх других приложений»</string>
+    <string name="subs_capture_denied">Запись экрана запрещена</string>
 </resources>

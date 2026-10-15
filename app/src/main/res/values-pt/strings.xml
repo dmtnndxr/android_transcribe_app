@@ -118,4 +118,37 @@
     <string name="history_no_text">Sem texto, apenas a gravação</string>
     <string name="btn_share_log">Partilhar registo de depuração</string>
     <string name="desc_share_log">Se o ditado falhar, partilhe o registo. Contém horas, erros e o modelo do telefone, mas não o texto ditado, o áudio nem as chaves.</string>
+
+    <!-- Voice panel, keyboard, file transcription and live subtitles -->
+    <string name="voice_listening">Ouvindo… (toque para parar)</string>
+    <string name="voice_processing">Processando…</string>
+    <string name="voice_need_mic">Permissão de microfone necessária.\nConceda-a no app.</string>
+    <string name="ime_tap_to_record">Toque para gravar</string>
+    <string name="ime_tap_to_stop">Toque para parar</string>
+    <string name="ime_listening">Ouvindo…</string>
+    <string name="ime_need_mic">Sem permissão de microfone</string>
+    <string name="ime_need_mic_hint">Abra o app para concedê-la</string>
+    <string name="ime_switch_keyboard">Trocar teclado</string>
+    <string name="ime_space">Espaço</string>
+    <string name="ime_enter">Enter</string>
+    <string name="ime_backspace">Apagar</string>
+    <string name="action_close">Fechar</string>
+    <string name="file_preparing">Preparando…</string>
+    <string name="file_decoding">Decodificando áudio…</string>
+    <string name="file_transcribing">Transcrevendo…</string>
+    <string name="file_transcribing_progress">Transcrevendo… %1$s / %2$s</string>
+    <string name="file_transcribing_at">Transcrevendo… %1$s</string>
+    <string name="file_copy">Copiar para a área de transferência</string>
+    <string name="file_copied">Copiado para a área de transferência</string>
+    <string name="file_copied_auto">Transcrição copiada para a área de transferência</string>
+    <string name="file_no_audio">Nenhum arquivo de áudio recebido</string>
+    <string name="file_decode_error">Não foi possível decodificar este arquivo de áudio</string>
+    <string name="file_no_speech">Nenhuma fala reconhecida neste arquivo</string>
+    <string name="subs_waiting">Aguardando áudio…</string>
+    <string name="subs_notification_title">Legendas ao vivo ativas</string>
+    <string name="subs_notification_text">Legendando o áudio reproduzido neste dispositivo</string>
+    <string name="subs_stop">Parar</string>
+    <string name="subs_grant_overlay">Permita “Sobrepor a outros apps”</string>
+    <string name="subs_overlay_required">As legendas ao vivo precisam da permissão “Sobrepor a outros apps”</string>
+    <string name="subs_capture_denied">A captura de tela foi negada</string>
 </resources>

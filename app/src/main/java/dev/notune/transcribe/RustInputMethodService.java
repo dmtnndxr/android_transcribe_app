@@ -614,8 +614,8 @@ public class RustInputMethodService extends InputMethodService {
 
         if (checkSelfPermission(android.Manifest.permission.RECORD_AUDIO)
                 != PackageManager.PERMISSION_GRANTED) {
-            if (statusView != null) statusView.setText("No mic permission - grant in app");
-            if (hintView != null) hintView.setText("Open the app to grant permission");
+            if (statusView != null) statusView.setText(R.string.ime_need_mic);
+            if (hintView != null) hintView.setText(R.string.ime_need_mic_hint);
             return;
         }
 
@@ -655,7 +655,7 @@ public class RustInputMethodService extends InputMethodService {
         }
         if (checkSelfPermission(android.Manifest.permission.RECORD_AUDIO)
                 != PackageManager.PERMISSION_GRANTED) {
-            if (statusView != null) statusView.setText("No mic permission - grant in app");
+            if (statusView != null) statusView.setText(R.string.ime_need_mic);
             return;
         }
 
@@ -765,15 +765,15 @@ public class RustInputMethodService extends InputMethodService {
         tintAiMic(aiActive);
         tintEditButton(editActive);
         if (recording) {
-            statusView.setText(editActive ? getString(R.string.ime_edit_listening)
-                    : aiActive ? getString(R.string.ime_ai_listening) : "Listening...");
-            hintView.setText("Tap to Stop");
+            statusView.setText(editActive ? R.string.ime_edit_listening
+                    : aiActive ? R.string.ime_ai_listening : R.string.ime_listening);
+            hintView.setText(R.string.ime_tap_to_stop);
             if (aiLabel != null) {
                 aiLabel.setText(aiActive ? R.string.ime_stop_label : R.string.ime_ai_mic_label);
             }
         } else {
-            statusView.setText("Processing...");
-            hintView.setText("Tap to Record");
+            statusView.setText(R.string.voice_processing);
+            hintView.setText(R.string.ime_tap_to_record);
             if (aiLabel != null) aiLabel.setText(R.string.ime_ai_mic_label);
             if (micLevelView != null) micLevelView.setLevel(0f);
         }
@@ -997,9 +997,9 @@ public class RustInputMethodService extends InputMethodService {
             if (isError) {
                 statusView.setText(lastStatus);
             } else if (isTranscribing || isWaiting) {
-                statusView.setText("Processing...");
+                statusView.setText(R.string.voice_processing);
             } else {
-                statusView.setText("Tap to Record");
+                statusView.setText(R.string.ime_tap_to_record);
             }
         }
 
@@ -1012,7 +1012,7 @@ public class RustInputMethodService extends InputMethodService {
         applyMicEnabledState();
 
         if (hintView != null && !isRecording && !postProcessRunning && !cancelRequested) {
-            hintView.setText("Tap to Record");
+            hintView.setText(R.string.ime_tap_to_record);
         }
     }
 
@@ -1071,7 +1071,7 @@ public class RustInputMethodService extends InputMethodService {
                 }
                 RecordingNotification.stop(this);
                 updateRecordButtonUI(false);
-                if (statusView != null) statusView.setText("Tap to Record");
+                if (statusView != null) statusView.setText(R.string.ime_tap_to_record);
                 releaseAudioFocus();
                 if (pendingSwitchBack) {
                     pendingSwitchBack = false;
@@ -1230,7 +1230,7 @@ public class RustInputMethodService extends InputMethodService {
             // would only go stale once the user has pasted it.
             TranscriptRescue.rescue(this, text, true);
             keepPendingText(committed);
-            if (statusMessage == null) statusMessage = "Tap to Record";
+            if (statusMessage == null) statusMessage = getString(R.string.ime_tap_to_record);
         }
         RecordingNotification.stop(this);
         DebugLog.event(this, "delivered: toField=" + toField);
@@ -1394,7 +1394,7 @@ public class RustInputMethodService extends InputMethodService {
                             ? HistoryStore.OUTCOME_CLIPBOARD : HistoryStore.OUTCOME_KEPT, null);
             TranscriptRescue.rescue(this, replacement, true);
             keepPendingText(replacement);
-            finishOperation("Tap to Record");
+            finishOperation(getString(R.string.ime_tap_to_record));
             DoneHaptics.play(this);
             return;
         }
@@ -1468,7 +1468,7 @@ public class RustInputMethodService extends InputMethodService {
         tintAiMic(false);
         tintEditButton(false);
         if (statusView != null) statusView.setText(message);
-        if (hintView != null) hintView.setText("Tap to Record");
+        if (hintView != null) hintView.setText(R.string.ime_tap_to_record);
         applyMicEnabledState();
         // A voice edit stopped with the switch-keyboard button ends here
         // rather than in deliverText; cancel paths clear the flag first.

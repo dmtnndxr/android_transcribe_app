@@ -118,4 +118,37 @@
     <string name="history_no_text">Nessun testo, solo la registrazione</string>
     <string name="btn_share_log">Condividi il log di debug</string>
     <string name="desc_share_log">Se la dettatura non funziona bene, condividi il log. Contiene orari, errori e modello del telefono, ma non testo dettato, audio o chiavi.</string>
+
+    <!-- Voice panel, keyboard, file transcription and live subtitles -->
+    <string name="voice_listening">In ascolto… (tocca per fermare)</string>
+    <string name="voice_processing">Elaborazione…</string>
+    <string name="voice_need_mic">Serve il permesso del microfono.\nConcedilo nell\'app.</string>
+    <string name="ime_tap_to_record">Tocca per registrare</string>
+    <string name="ime_tap_to_stop">Tocca per fermare</string>
+    <string name="ime_listening">In ascolto…</string>
+    <string name="ime_need_mic">Nessun permesso del microfono</string>
+    <string name="ime_need_mic_hint">Apri l\'app per concederlo</string>
+    <string name="ime_switch_keyboard">Cambia tastiera</string>
+    <string name="ime_space">Spazio</string>
+    <string name="ime_enter">Invio</string>
+    <string name="ime_backspace">Backspace</string>
+    <string name="action_close">Chiudi</string>
+    <string name="file_preparing">Preparazione…</string>
+    <string name="file_decoding">Decodifica dell\'audio…</string>
+    <string name="file_transcribing">Trascrizione…</string>
+    <string name="file_transcribing_progress">Trascrizione… %1$s / %2$s</string>
+    <string name="file_transcribing_at">Trascrizione… %1$s</string>
+    <string name="file_copy">Copia negli appunti</string>
+    <string name="file_copied">Copiato negli appunti</string>
+    <string name="file_copied_auto">Trascrizione copiata negli appunti</string>
+    <string name="file_no_audio">Nessun file audio ricevuto</string>
+    <string name="file_decode_error">Impossibile decodificare questo file audio</string>
+    <string name="file_no_speech">Nessun parlato riconosciuto in questo file</string>
+    <string name="subs_waiting">In attesa di audio…</string>
+    <string name="subs_notification_title">Sottotitoli in tempo reale attivi</string>
+    <string name="subs_notification_text">Sottotitola l\'audio riprodotto su questo dispositivo</string>
+    <string name="subs_stop">Ferma</string>
+    <string name="subs_grant_overlay">Consenti «Mostra sopra altre app»</string>
+    <string name="subs_overlay_required">I sottotitoli in tempo reale richiedono il permesso «Mostra sopra altre app»</string>
+    <string name="subs_capture_denied">La cattura dello schermo è stata negata</string>
 </resources>
