@@ -256,6 +256,14 @@ impl Engine {
             };
             match self.session.run(samples, &opts) {
                 Ok(t) => return Ok(t.text),
+                // Some model families stop a decode that hit its length
+                // budget or started repeating itself; the text up to that
+                // point is still the best answer, so keep it.
+                Err(transcribe_cpp::Error::OutputTruncated { message, partial })
+                | Err(transcribe_cpp::Error::OutputRepetition { message, partial }) => {
+                    log::warn!("decode stopped early ({}); using the partial text", message);
+                    return Ok(partial.map(|t| t.text).unwrap_or_default());
+                }
                 Err(transcribe_cpp::Error::Unsupported(msg)) if self.language.is_some() => {
                     let lang = self.language.take().unwrap();
                     self.language = lang.split_once('-').map(|(primary, _)| primary.to_string());
