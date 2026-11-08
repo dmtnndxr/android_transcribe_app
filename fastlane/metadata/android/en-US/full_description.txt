@@ -31,7 +31,7 @@ WHY YOU'LL LOVE IT
 The speech model (~485 MB) is included in the app; nothing is downloaded on first launch.
 
 POWERED BY OPEN SOURCE
-• NVIDIA Parakeet TDT 0.6B v3 — on-device speech recognition (GGUF by handy-computer)
+• Parakeet Ultra by Moondream, based on NVIDIA Parakeet TDT 0.6B v3 — on-device speech recognition (GGUF by handy-computer)
 • transcribe.cpp — the inference engine by CJ Pais / Handy Computer
 • A native Android interface with a Rust core
 

@@ -51,7 +51,8 @@
     <string name="model_desc_sensevoice">Inglés, chino, cantonés, japonés, coreano; rápido</string>
     <string name="model_desc_whisper_small">99 idiomas, compacto; traduce al inglés</string>
     <string name="model_desc_nemotron">40 idiomas incl. chino, japonés, coreano, árabe, hindi; con puntuación</string>
-    <string name="model_desc_parakeet_v3_q8">Como el modelo integrado, mayor precisión</string>
+    <string name="model_desc_gigaam">Solo ruso, con puntuación</string>
+    <string name="model_desc_builtin_q8">Como el modelo integrado, mayor precisión</string>
     <string name="model_desc_whisper_turbo">99 idiomas, el más preciso de esta lista; no traduce</string>
     <string name="model_desc_browse">Explorar todos los modelos de transcribe.cpp</string>
     <string name="models_desc">El modelo integrado funciona al instante. También puedes importar cualquier modelo GGUF de transcribe.cpp que hayas descargado. La app permanece totalmente sin conexión; las descargas se hacen en tu navegador. El teclado de voz aplica un cambio de modelo tras reiniciarse.</string>

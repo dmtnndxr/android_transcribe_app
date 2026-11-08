@@ -68,10 +68,11 @@ impl Engine {
             return Err(format!("model file not found: {}", model_path.display()));
         }
         let model = transcribe_cpp::Model::load(model_path).map_err(|e| e.to_string())?;
+        let caps = model.capabilities().map_err(|e| e.to_string())?;
         // Translation is gated on the model's capabilities: models without it
         // (e.g. Parakeet) silently keep transcribing, so the setting can stay
         // on while switching models.
-        let task = if translate && model.capabilities().supports_translate {
+        let task = if translate && caps.supports_translate {
             transcribe_cpp::Task::Translate
         } else {
             if translate {
@@ -121,7 +122,7 @@ impl Engine {
             n_threads: threads,
             ..Default::default()
         };
-        let supports_streaming = model.capabilities().supports_streaming;
+        let supports_streaming = caps.supports_streaming;
         log::info!("engine: streaming supported: {}", supports_streaming);
         let session = model.session_with(&options).map_err(|e| e.to_string())?;
         Ok(Engine {

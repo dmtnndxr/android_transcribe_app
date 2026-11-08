@@ -162,7 +162,7 @@ public final class PostProcessClient {
                     buildEditBody(model, systemPrompt, instruction, selectedText, false),
                     CONNECT_TIMEOUT_MS, READ_TIMEOUT_MS, false, unwrapQuotes);
         }
-        return keepEdgeWhitespace(selectedText, reply);
+        return keepEdgeWhitespace(selectedText, TextTidy.fitToSelection(selectedText, reply));
     }
 
     /**

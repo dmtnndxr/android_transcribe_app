@@ -1006,11 +1006,15 @@ public class RustInputMethodService extends InputMethodService {
      *                      a post-processing failure. Pass null for the default.
      */
     private void deliverText(String text, String statusMessage) {
-        String committed = text + " ";
         InputConnection ic = getCurrentInputConnection();
+        boolean toField = inputActive && ic != null && isCurrentTarget(recordingTargetKey);
+        // One word comes back from the model as "Word."; fit it to the text
+        // around the cursor.
+        text = TextTidy.fitSingleWord(text, toField ? ic.getTextBeforeCursor(64, 0) : null);
+        String committed = text + " ";
         // statusMessage, when set, says why AI processing didn't happen.
         String historyNote = statusMessage;
-        if (inputActive && ic != null && isCurrentTarget(recordingTargetKey)) {
+        if (toField) {
             commitTranscribedText(ic, committed);
             HistoryStore.finish(this, historyId, text, null, HistoryStore.OUTCOME_INSERTED, historyNote);
         } else {

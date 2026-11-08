@@ -45,6 +45,7 @@ tier1() {
       -cp "$TESTLIBS/json.jar:$TESTLIBS/junit-console.jar" \
       -d "$OUT/classes" \
       app/src/main/java/dev/notune/transcribe/PostProcessClient.java \
+      app/src/main/java/dev/notune/transcribe/TextTidy.java \
       tools/verify/tests/*.java 2>&1; then
     fail "test compilation"
     return

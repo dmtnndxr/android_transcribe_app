@@ -6,9 +6,10 @@ use std::path::{Path, PathBuf};
 
 /// Asset directory (and filesDir subdirectory) holding the bundled GGUF.
 const BUILTIN_MODEL_DIR: &str = "builtin-model";
-/// Marker file written after a successful extraction. If this file is missing,
-/// the directory is assumed to be incomplete (e.g. interrupted mid-extraction)
-/// and the assets will be re-extracted.
+/// Marker file written after a successful extraction; it lists the extracted
+/// asset names. If it is missing, the directory is assumed to be incomplete
+/// (e.g. interrupted mid-extraction); if it names other files, an app update
+/// changed the bundled model. Either way the assets are re-extracted.
 const EXTRACTION_COMPLETE_MARKER: &str = ".extraction_complete";
 /// Model directory of the pre-GGUF (ONNX) app versions; deleted on sight so
 /// upgrades don't leave ~670 MB of dead files behind.
@@ -45,8 +46,19 @@ pub fn extract_builtin_model(env: &mut JNIEnv, context: &JObject) -> anyhow::Res
     let model_dir = base_path.join(BUILTIN_MODEL_DIR);
     let marker_file = model_dir.join(EXTRACTION_COMPLETE_MARKER);
 
-    // Only skip extraction if the marker file exists (proves prior extraction completed)
-    if marker_file.exists() {
+    let asset_manager_obj = env
+        .call_method(
+            context,
+            "getAssets",
+            "()Landroid/content/res/AssetManager;",
+            &[],
+        )?
+        .l()?;
+    let bundled = list_assets(env, &asset_manager_obj, BUILTIN_MODEL_DIR)?.join("\n");
+
+    // Only skip extraction if the marker proves a completed extraction of
+    // the model this APK bundles. Markers from older versions say just "ok".
+    if std::fs::read_to_string(&marker_file).is_ok_and(|m| m == bundled) {
         return find_gguf(&model_dir);
     }
 
@@ -58,19 +70,10 @@ pub fn extract_builtin_model(env: &mut JNIEnv, context: &JObject) -> anyhow::Res
 
     std::fs::create_dir_all(&model_dir)?;
 
-    let asset_manager_obj = env
-        .call_method(
-            context,
-            "getAssets",
-            "()Landroid/content/res/AssetManager;",
-            &[],
-        )?
-        .l()?;
-
     copy_assets_recursively(env, &asset_manager_obj, BUILTIN_MODEL_DIR, &base_path)?;
 
     // Write the marker file to indicate successful completion
-    std::fs::write(&marker_file, "ok")?;
+    std::fs::write(&marker_file, &bundled)?;
     log::info!("Asset extraction complete, marker written");
 
     find_gguf(&model_dir)
@@ -97,6 +100,29 @@ fn find_gguf(dir: &Path) -> anyhow::Result<PathBuf> {
         }
     }
     anyhow::bail!("no GGUF file found in {}", dir.display())
+}
+
+/// Names of the assets directly under `path`, sorted.
+fn list_assets(env: &mut JNIEnv, asset_manager: &JObject, path: &str) -> anyhow::Result<Vec<String>> {
+    use jni::objects::JObjectArray;
+
+    let path_jstring = env.new_string(path)?;
+    let list: JObjectArray = env
+        .call_method(
+            asset_manager,
+            "list",
+            "(Ljava/lang/String;)[Ljava/lang/String;",
+            &[(&path_jstring).into()],
+        )?
+        .l()?
+        .into();
+    let mut names = Vec::new();
+    for i in 0..env.get_array_length(&list)? {
+        let name = env.get_object_array_element(&list, i)?;
+        names.push(env.get_string(&name.into())?.into());
+    }
+    names.sort();
+    Ok(names)
 }
 
 fn copy_assets_recursively(

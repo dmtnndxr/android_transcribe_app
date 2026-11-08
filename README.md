@@ -176,7 +176,7 @@ The built-in Parakeet model works out of the box. Under **Manage speech models**
 
 - **Core:** Rust (`cdylib`) for audio capture and the engine, with a thin Java layer for the Android UI, the input method and the speech service.
 - **Inference:** [transcribe.cpp](https://github.com/handy-computer/transcribe.cpp) (ggml) on the CPU. Any GGUF model it supports can be imported.
-- **Built-in model:** NVIDIA Parakeet TDT 0.6B v3, Q4_K_M GGUF, about 485 MB, shipped inside the APK. Nothing is downloaded at first launch.
+- **Built-in model:** Parakeet Ultra (Moondream's post-trained NVIDIA Parakeet TDT 0.6B v3), Q4_K_M GGUF, about 485 MB, shipped inside the APK. Nothing is downloaded at first launch.
 - **Streaming:** models that support it (Nemotron streaming) transcribe while you speak; the others transcribe after you stop.
 - **Integration:** an input method (IME), a `RecognitionService` for apps that use Android's `SpeechRecognizer`, and a `RECOGNIZE_SPEECH` activity for keyboards that fire the speech intent.
 - **AI:** a plain OpenAI-compatible `/chat/completions` client with no SDK. Connect timeout 10 s, reply timeout 45 s.
@@ -269,7 +269,7 @@ export STORE_PASS=yourpassword
 
 ### Model Assets
 
-The built-in Parakeet TDT GGUF model (~485 MB) is automatically downloaded from HuggingFace during the first build via a Gradle task. The checksum is verified with SHA-256. No manual download is needed.
+The built-in Parakeet Ultra GGUF model (~485 MB) is automatically downloaded from HuggingFace during the first build via a Gradle task. The checksum is verified with SHA-256. No manual download is needed.
 
 ## Project Structure
 
@@ -294,8 +294,8 @@ The built-in Parakeet TDT GGUF model (~485 MB) is automatically downloaded from 
 
 ## Acknowledgments
 
-- **Speech Model:** [Parakeet TDT 0.6b v3](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3) by NVIDIA.
-    - GGUF conversion by [handy-computer](https://huggingface.co/handy-computer/parakeet-tdt-0.6b-v3-gguf).
+- **Speech Model:** [Parakeet Ultra](https://huggingface.co/moondream/parakeet-ultra) by Moondream, post-trained from [Parakeet TDT 0.6b v3](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3) by NVIDIA. CC-BY-4.0.
+    - GGUF conversion by [handy-computer](https://huggingface.co/handy-computer/parakeet-ultra-gguf).
     - Licensed under [CC-BY 4.0](https://creativecommons.org/licenses/by/4.0/).
 - **Inference Backend:** [transcribe.cpp](https://github.com/handy-computer/transcribe.cpp) by CJ Pais / Handy Computer.
 - **AI cleanup** is modeled on [Handy](https://github.com/cjpais/handy)'s [post-processing](https://handy.computer/docs/post-processing) — same idea of a separate trigger for the processed variant, and the same `${output}` prompt placeholder.

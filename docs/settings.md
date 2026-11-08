@@ -66,7 +66,7 @@ Under **Manage speech models**.
 
 | Setting | Default | What it does |
 |---|---|---|
-| **Active model** | Parakeet TDT 0.6B v3 | The built-in model: 25 European languages, about 485 MB, included in the APK. |
+| **Active model** | Parakeet Ultra | The built-in model, a more accurate retrain of Parakeet TDT 0.6B v3: 25 European languages, about 485 MB, included in the APK. |
 | **Import model file (.gguf)** | — | Copies a [transcribe.cpp](https://github.com/handy-computer/transcribe.cpp) GGUF model into the app. Download the file in your browser first; **Where to get models** lists direct links. |
 | **Language** | Automatic | The language passed to the model. Set it explicitly if speech comes out in the wrong language or script. Languages the model doesn't support are ignored. |
 | **Translate to English** | Off | For models that support it (Whisper): speech in any language becomes English text. Other models ignore it. |
@@ -76,7 +76,8 @@ Which model to pick:
 
 | Model | Languages | Notes |
 |---|---|---|
-| Parakeet TDT 0.6B v3 (built in) | 25 European | Good default. Transcribes after you stop. |
+| Parakeet Ultra (built in) | 25 European | Good default. Handles English words inside other languages. Transcribes after you stop. |
+| GigaAM v3 | Russian | Most accurate for Russian, a third of the memory. Writes English words in Cyrillic. |
 | Parakeet 110M | English | Small and fast, for older phones. |
 | Nemotron streaming | 40, incl. Chinese, Japanese, Korean, Arabic, Hindi | Streaming: text appears while you speak. Adds punctuation. |
 | Whisper small | 99 | Compact; can translate to English. |
