@@ -14,8 +14,8 @@ android {
         applicationId = "dev.notune.transcribe"
         minSdk = 26
         targetSdk = 36
-        versionCode = 25
-        versionName = "0.1.24-beta.1"
+        versionCode = 26
+        versionName = "0.1.24"
         ndk {
             abiFilters += "arm64-v8a"
         }

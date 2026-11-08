@@ -1,0 +1,9 @@
+- built-in model is now Parakeet Ultra: same languages, more accurate; updates replace the old model automatically
+- new speech engine (transcribe.cpp 0.4.1): about half the memory at the same speed
+- a single dictated word no longer gets a period, and no capital in the middle of a sentence
+- AI settings: pick the model from the server's list; prompt templates, including translation
+- history: seek and pause recordings
+- setup wizard: test the AI connection and try it right away
+- voice-input status is green once the Boice keyboard is enabled
+- edit wand works in Telegram's expanded message field
+- GigaAM v3 (Russian) in the list of downloadable models
