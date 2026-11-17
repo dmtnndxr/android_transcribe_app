@@ -33,6 +33,8 @@
 
     <string name="setting_select_transcription">Выделять транскрипцию</string>
     <string name="setting_select_transcription_desc">Выделять расшифрованный текст, чтобы его можно было удалить одним нажатием Backspace</string>
+    <string name="setting_vibrate_done">Вибрация по готовности</string>
+    <string name="setting_vibrate_done_desc">Короткая вибрация, когда текст готов, в том числе после обработки ИИ</string>
 
     <string name="setting_pause_audio">Приостанавливать аудио</string>
     <string name="setting_pause_audio_desc">Приостанавливать аудио во время записи</string>

@@ -7,6 +7,8 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Short buzz when the voice keyboard finishes a dictation. -->
+    <uses-permission android:name="android.permission.VIBRATE" />
 
     <!-- Used only by the optional AI-cleanup feature (off by default), which
          sends a finished transcription to an endpoint the user configures.
