@@ -1,0 +1,1 @@
+- the keyboard vibrates briefly when the text is ready, including after AI processing (can be turned off in Settings)
