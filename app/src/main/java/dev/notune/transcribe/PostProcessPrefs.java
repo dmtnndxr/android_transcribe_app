@@ -34,6 +34,9 @@ public final class PostProcessPrefs {
     private static final String API_KEY = "pp_api_key";
     private static final String MODEL = "pp_model";
     private static final String PROMPT = "pp_prompt";
+    private static final String NANO_PROVIDER = "pp_use_gemini_nano";
+
+    public enum Provider { OPENAI_COMPATIBLE, GEMINI_NANO }
 
     /**
      * Used when the user hasn't written their own. Defined in
@@ -49,12 +52,26 @@ public final class PostProcessPrefs {
     }
 
     public static void setEnabled(Context ctx, boolean enabled) {
-        File marker = new File(ctx.getFilesDir(), ENABLED);
+        setMarker(ctx, ENABLED, enabled);
+    }
+
+    public static Provider getProvider(Context ctx) {
+        return new File(ctx.getFilesDir(), NANO_PROVIDER).exists()
+                ? Provider.GEMINI_NANO : Provider.OPENAI_COMPATIBLE;
+    }
+
+    public static boolean setProvider(Context ctx, Provider provider) {
+        setMarker(ctx, NANO_PROVIDER, provider == Provider.GEMINI_NANO);
+        return getProvider(ctx) == provider;
+    }
+
+    private static void setMarker(Context ctx, String name, boolean enabled) {
+        File marker = new File(ctx.getFilesDir(), name);
         if (enabled) {
             try {
                 marker.createNewFile();
             } catch (IOException e) {
-                Log.e(TAG, "Failed to create " + ENABLED, e);
+                Log.e(TAG, "Failed to create " + name, e);
             }
         } else {
             marker.delete();
@@ -77,14 +94,13 @@ public final class PostProcessPrefs {
     public static void setPrompt(Context ctx, String v)  { write(ctx, PROMPT, v); }
 
     /**
-     * True when a request could actually be built: enabled, with an endpoint and
-     * a model name. The API key is deliberately not required — local servers
-     * (Ollama, LM Studio, llama.cpp) accept unauthenticated requests.
+     * Checks the saved setup. Nano compatibility and asset status are checked
+     * at request time. Local OpenAI-compatible endpoints can omit the API key.
      */
     public static boolean isConfigured(Context ctx) {
         return isEnabled(ctx)
-                && !getBaseUrl(ctx).isEmpty()
-                && !getModel(ctx).isEmpty();
+                && (getProvider(ctx) == Provider.GEMINI_NANO
+                    || (!getBaseUrl(ctx).isEmpty() && !getModel(ctx).isEmpty()));
     }
 
     private static String read(Context ctx, String name) {

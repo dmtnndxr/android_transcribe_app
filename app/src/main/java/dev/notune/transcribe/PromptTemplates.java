@@ -19,6 +19,10 @@ final class PromptTemplates {
             + "Fix obvious speech-to-text errors. Reply with the list only, with no preamble "
             + "or commentary.\n\n${output}";
 
+    static final String FILLERS =
+            "Remove filler words and false starts from the dictation below. Fix punctuation "
+            + "and preserve its meaning, tone, and language. Return only the cleaned text.\n\n${output}";
+
     /** Translates whatever was dictated into {@code language} (an English name). */
     static String translate(String language) {
         return "You are a translator. Translate the dictated text below into " + language
@@ -44,6 +48,7 @@ final class PromptTemplates {
                         Locale.ENGLISH.getDisplayLanguage(Locale.getDefault())), translate("English")},
                 {ctx.getString(R.string.pp_template_formal), FORMAL},
                 {ctx.getString(R.string.pp_template_bullets), BULLETS},
+                {ctx.getString(R.string.pp_template_fillers), FILLERS},
         };
         if (device == null) return base;
         String[][] out = new String[base.length + 1][];

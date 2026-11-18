@@ -1,6 +1,6 @@
 # Feature proposal: on-device Gemini Nano post-processing
 
-**Status:** proposal for maintainer discussion; no implementation is included.
+**Status:** the PR implements the optional provider with the ML Kit Prompt API. Tests on compatible hardware are pending.
 
 ## Motivation and scope
 
@@ -45,6 +45,18 @@ Google documents that GenAI inference is allowed only when the app is the top fo
 - [ ] Failures, cancellation, invalid or oversized responses, quota/resource exhaustion, and unsupported/blocked IME execution preserve the original transcription without silent cloud fallback or data loss.
 - [ ] An actual IME test records whether inference succeeds while another app is foreground, including focus/lifecycle transitions. If blocked, the chosen foreground alternative is explicitly approved and tested; a foreground service is not treated as a workaround.
 - [ ] Tests cover provider selection/migration, availability and download states, error paths, consent, privacy, prompt handling, token limits and regression of the existing HTTP provider. Document supported configurations, provisioning requirements, quality limitations and measured latency on representative hardware.
+
+## Device verification
+
+Record the device, Android build, AICore version, model status and latency for the settings sample and for actual dictation. Start with a supported handset such as the Samsung Galaxy S25 Ultra.
+
+1. Upgrade from a version with server credentials and a custom prompt saved. Confirm the server provider is selected, test it, switch to Gemini Nano, then switch back and test the saved server settings again. Verify plain dictation and server-based selection editing.
+2. Enable Nano on a fresh supported device. Check the statuses before, during and after provisioning. Cancel the consent dialog and verify that Boice never starts a download. Confirm it, watch progress, and retry after a failed attempt. Try the settings screen on an unsupported device as well.
+3. Once ready, disable networking and try the settings sample and the keyboard in another app. Repeat with Wi-Fi enabled and point the saved server settings at a local test endpoint. Confirm the endpoint receives no requests from Nano dictation or the Nano settings test. Run the equivalent server test as a control.
+4. Compare plain dictation and the processed result in English, Russian and other languages available on the handset. Include names, numbers, quotes, punctuation, filler words, a formatting template and prompts with and without `${output}`.
+5. With Nano processing, cancel, switch fields, hide the keyboard and switch apps. Check where the original transcription appears. Try dictation beyond the token limit and confirm the original stays intact. Record any `BACKGROUND_USE_BLOCKED` result and compare it with the settings sample, which runs in a foreground activity.
+
+The Prompt API reports availability for the installed model and offers no per-language capability query. Its outputs should be checked per language during device verification. ML Kit's additional GenAI terms apply to the dependency. [ML Kit GenAI overview and terms](https://developers.google.com/ml-kit/genai)
 
 ## References
 

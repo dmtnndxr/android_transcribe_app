@@ -24,6 +24,7 @@ import android.text.InputType;
 import android.content.res.ColorStateList;
 import android.view.ContextThemeWrapper;
 import java.io.File;
+import java.util.concurrent.Future;
 
 import com.google.android.material.color.DynamicColors;
 import com.google.android.material.color.MaterialColors;
@@ -66,14 +67,12 @@ public class RustInputMethodService extends InputMethodService {
     private Button undoAction;
     private View pendingBar;
     private TextView pendingTextView;
-    /**
-     * Whether the recording in flight (or about to start) should be
-     * post-processed. Latched when the mic is tapped so a settings change
-     * mid-recording can't switch modes underneath the user.
-     */
-    private boolean postProcessNext = false;
+    /** The provider chosen when starting capture, or null for plain dictation. */
+    private PostProcessPrefs.Provider postProcessNext;
     /** True while an LLM request is outstanding, to keep both mics disabled. */
     private boolean postProcessRunning = false;
+    private Future<?> nanoRequest;
+    private String nanoRawText;
     /** True after capture stops and until the native transcription callback arrives. */
     private boolean transcriptionPending = false;
     /** A canceled native transcription cannot always be interrupted; discard its callback. */
@@ -359,7 +358,7 @@ public class RustInputMethodService extends InputMethodService {
                 }
                 // Auto-start is the plain path: post-processing is opt-in per
                 // recording, via its own button.
-                postProcessNext = false;
+                postProcessNext = null;
                 editSelectionNext = false;
                 selectionToEdit = null;
                 clearUndo();
@@ -386,7 +385,7 @@ public class RustInputMethodService extends InputMethodService {
                         fellBackToTranscription = true;
                     } catch (Throwable ignored) { }
                 }
-                postProcessNext = false;
+                postProcessNext = null;
                 editSelectionNext = false;
                 selectionToEdit = null;
                 transcriptionPending = fellBackToTranscription;
@@ -404,6 +403,7 @@ public class RustInputMethodService extends InputMethodService {
             audioPauser.abandon(this);
             pauseAudioActive = false;
         }
+        stopNanoProcessing(R.string.pp_nano_background, true);
     }
 
     @Override
@@ -457,6 +457,7 @@ public class RustInputMethodService extends InputMethodService {
         selectionNonEmpty = false;
         lastSelStart = -1;
         lastSelEnd = -1;
+        stopNanoProcessing(R.string.pp_nano_canceled, true);
     }
 
     @Override
@@ -502,7 +503,7 @@ public class RustInputMethodService extends InputMethodService {
         }
 
         clearUndo();
-        postProcessNext = postProcess;
+        postProcessNext = postProcess ? PostProcessPrefs.getProvider(this) : null;
         editSelectionNext = false;
         selectionToEdit = null;
         discardNextTranscription = false;
@@ -544,7 +545,7 @@ public class RustInputMethodService extends InputMethodService {
         clearUndo();
         selectionToEdit = snapshot;
         editSelectionNext = true;
-        postProcessNext = false;
+        postProcessNext = null;
         discardNextTranscription = false;
         cancelRequested = false;
         if (isPauseAudioEnabled()) {
@@ -602,8 +603,8 @@ public class RustInputMethodService extends InputMethodService {
             inputView.setKeepScreenOn(recording);
         }
         boolean editActive = recording && editSelectionNext;
-        boolean aiActive = recording && postProcessNext && !editActive;
-        tintRecordButton(recording && !postProcessNext && !editActive);
+        boolean aiActive = recording && postProcessNext != null && !editActive;
+        tintRecordButton(recording && postProcessNext == null && !editActive);
         tintAiMic(aiActive);
         tintEditButton(editActive);
         if (recording) {
@@ -748,6 +749,7 @@ public class RustInputMethodService extends InputMethodService {
 
     @Override
     public void onDestroy() {
+        stopNanoProcessing(R.string.pp_nano_canceled, false);
         super.onDestroy();
         if (mainHandler != null) mainHandler.removeCallbacks(expireUndo);
         llmGeneration++;
@@ -848,9 +850,9 @@ public class RustInputMethodService extends InputMethodService {
     // Called from Rust
     public void onTextTranscribed(String text) {
         mainHandler.post(() -> {
-            boolean postProcess = postProcessNext;
+            PostProcessPrefs.Provider provider = postProcessNext;
             boolean editSelection = editSelectionNext;
-            postProcessNext = false;
+            postProcessNext = null;
             editSelectionNext = false;
             transcriptionPending = false;
 
@@ -884,7 +886,7 @@ public class RustInputMethodService extends InputMethodService {
 
             historyId = HistoryStore.add(this,
                     editSelection ? HistoryStore.SOURCE_EDIT
-                            : postProcess ? HistoryStore.SOURCE_AI : HistoryStore.SOURCE_DICTATION,
+                            : provider != null ? HistoryStore.SOURCE_AI : HistoryStore.SOURCE_DICTATION,
                     text, captureAudio, Math.max(0, captureStoppedAt - captureStartedAt));
             captureAudio = null;
 
@@ -899,13 +901,16 @@ public class RustInputMethodService extends InputMethodService {
                 return;
             }
 
-            if (postProcess) {
-                if (PostProcessPrefs.isConfigured(this)) {
-                    startPostProcessing(text);
-                } else {
-                    // The AI mic was tapped but there's no endpoint/model set.
-                    // Insert what we heard rather than dropping the user's words.
+            if (provider != null) {
+                if (provider != PostProcessPrefs.getProvider(this)) {
+                    deliverText(text, getString(R.string.ime_ai_provider_changed));
+                } else if (!PostProcessPrefs.isConfigured(this)) {
                     deliverText(text, getString(R.string.ime_ai_not_configured));
+                } else if (provider == PostProcessPrefs.Provider.GEMINI_NANO && !windowVisible) {
+                    deliverText(text, getString(R.string.ime_nano_original,
+                            getString(R.string.pp_nano_background)));
+                } else {
+                    startPostProcessing(text, provider);
                 }
                 return;
             }
@@ -920,7 +925,8 @@ public class RustInputMethodService extends InputMethodService {
      * the status line — post-processing is a bonus, never a gate on getting the
      * user's words into the field.
      */
-    private void startPostProcessing(String rawText) {
+    private void startPostProcessing(String rawText, PostProcessPrefs.Provider provider) {
+        boolean nano = provider == PostProcessPrefs.Provider.GEMINI_NANO;
         postProcessRunning = true;
         cancelRequested = false;
         final long requestGeneration = ++llmGeneration;
@@ -932,15 +938,18 @@ public class RustInputMethodService extends InputMethodService {
             pauseAudioActive = false;
         }
         if (statusView != null) statusView.setText(R.string.ime_ai_working);
-        if (hintView != null) hintView.setText(R.string.ime_ai_working_hint);
+        if (hintView != null) hintView.setText(nano
+                ? R.string.ime_nano_working_hint : R.string.ime_ai_working_hint);
         applyMicEnabledState();
 
-        PostProcessor.processAsync(this, rawText, new PostProcessor.Callback() {
+        Future<?> task = PostProcessor.processAsync(this, provider, rawText, new PostProcessor.Callback() {
             @Override
             public void onSuccess(String processed) {
                 mainHandler.post(() -> {
                     if (requestGeneration != llmGeneration) return;
                     postProcessRunning = false;
+                    nanoRequest = null;
+                    nanoRawText = null;
                     deliverText(processed, null);
                 });
             }
@@ -950,11 +959,36 @@ public class RustInputMethodService extends InputMethodService {
                 mainHandler.post(() -> {
                     if (requestGeneration != llmGeneration) return;
                     postProcessRunning = false;
-                    Log.w(TAG, "Post-processing failed, inserting raw text: " + message);
-                    deliverText(rawText, getString(R.string.ime_ai_failed, message));
+                    nanoRequest = null;
+                    nanoRawText = null;
+                    deliverText(rawText, getString(nano
+                            ? R.string.ime_nano_original : R.string.ime_ai_failed, message));
                 });
             }
         });
+        if (nano) {
+            nanoRequest = task;
+            nanoRawText = rawText;
+        }
+    }
+
+    private void stopNanoProcessing(int reason, boolean deliver) {
+        if (nanoRequest == null) return;
+        ++llmGeneration;
+        nanoRequest.cancel(true);
+        nanoRequest = null;
+        String raw = nanoRawText;
+        nanoRawText = null;
+        postProcessRunning = false;
+        String message = getString(R.string.ime_nano_original, getString(reason));
+        if (deliver) {
+            deliverText(raw, message);
+        } else {
+            boolean copied = TranscriptRescue.isClipboardEnabled(this);
+            HistoryStore.finish(this, historyId, raw, null,
+                    copied ? HistoryStore.OUTCOME_CLIPBOARD : HistoryStore.OUTCOME_KEPT, message);
+            if (copied) TranscriptRescue.rescue(this, raw, false);
+        }
     }
 
     /** Runs the spoken instruction and replaces only the still-identical selection. */
@@ -1139,7 +1173,7 @@ public class RustInputMethodService extends InputMethodService {
                     Log.w(TAG, "Couldn't stop recording after cancel failed", stopError);
                 }
             }
-            postProcessNext = false;
+            postProcessNext = null;
             editSelectionNext = false;
             selectionToEdit = null;
             discardNextTranscription = fellBackToTranscription;
@@ -1175,6 +1209,10 @@ public class RustInputMethodService extends InputMethodService {
             return;
         }
         if (postProcessRunning) {
+            if (nanoRequest != null) {
+                stopNanoProcessing(R.string.pp_nano_canceled, true);
+                return;
+            }
             llmGeneration++;
             postProcessRunning = false;
             HistoryStore.finish(this, historyId, null, null, HistoryStore.OUTCOME_CANCELED, null);

@@ -12,10 +12,10 @@ Private speech-to-text for Android. Speech is transcribed on the phone and typed
 
 ## Why this app
 
-- **Your voice stays on the phone.** Recognition runs on-device and works in airplane mode. No account, no tracking.
+- **Your voice stays on the phone.** Recognition runs on-device and works in airplane mode without an account.
 - **Works with the keyboard you already use.** Tap the microphone in SwiftKey, HeliBoard and others, or use the built-in voice keyboard.
 - **Edit text by voice.** Select text, tap the wand, say "make this shorter" or "translate to German".
-- **Your own AI, or none.** Cleanup and editing work with any OpenAI-compatible server, including a local Ollama or LM Studio. Off by default.
+- **Optional AI.** Dictation cleanup can use on-device Gemini Nano or an OpenAI-compatible server such as Ollama or LM Studio. AI is off by default.
 - **Nothing gets lost.** If the text field is gone when transcription finishes, the text goes to the clipboard, and every dictation is kept in an on-device history with its recording.
 - **Free and open source** (MIT).
 
@@ -46,6 +46,7 @@ the [original Offline Voice Input from Google Play](https://play.google.com/stor
 |---|---|---|
 | Offline dictation, live subtitles, audio-file transcription, custom GGUF models | ✅ | ✅ |
 | AI post-processing with your own OpenAI-compatible server | — | ✅ |
+| AI dictation post-processing with Gemini Nano on supported devices | — | ✅ |
 | Voice editing of selected text (the wand) | — | ✅ |
 | Live text while you speak (streaming models) | — | ✅ |
 | Cancel during recording, transcription or AI; Undo after a voice edit | — | ✅ |
@@ -59,13 +60,13 @@ The comparison is against upstream 0.1.18, the version the fork is based on.
 ## Features
 
 - **Voice input in any app:** Tap the microphone on the keyboard you already use (SwiftKey, etc.) or a website's voice search, and your speech is transcribed straight into the text field. The app registers as your device's speech-to-text provider.
-- **100% offline & private:** The Parakeet TDT model runs entirely on-device — no audio ever leaves your phone, and no network is required. (The one exception is *AI post-processing*, below: it is off by default, and even then only the finished text is sent, never audio.)
+- **Offline speech recognition:** The Parakeet TDT model runs on-device and works without a network connection. Audio stays on your phone.
 - **Live Subtitles:** Real-time captions for any audio/video playing on your device.
 - **Transcribe audio files:** Share an audio file to the app, or open it with the app, to get its text.
 - **Optional voice keyboard:** A built-in keyboard you can switch to for voice input wherever you prefer it.
 - **Supported Languages:** Bulgarian, Croatian, Czech, Danish, Dutch, English, Estonian, Finnish, French, German, Greek, Hungarian, Italian, Latvian, Lithuanian, Maltese, Polish, Portuguese, Romanian, Slovak, Slovenian, Spanish, Swedish, Russian, Ukrainian.
 - **Custom models:** Import any [transcribe.cpp](https://github.com/handy-computer/transcribe.cpp) GGUF model (Whisper, Nemotron streaming, Canary, more Parakeet variants, …) from a downloaded file. Streaming models show the text while you speak.
-- **Optional AI post-processing:** A second microphone on the voice keyboard runs your transcription through an LLM before inserting it — fixing grammar, reformatting, translating, or whatever your prompt asks for. Works with any OpenAI-compatible endpoint, including a local Ollama or LM Studio. Off by default.
+- **Optional AI post-processing:** The voice keyboard's **Dictate + AI** microphone can fix grammar, remove filler words, reformat text, or apply your prompt. Choose on-device Gemini Nano or an OpenAI-compatible endpoint.
 - **Voice editing of selected text:** Select text in an editor, tap the wand on the voice keyboard, and speak an instruction such as “make this shorter.” The replacement is applied only if the same text is still selected.
 - **History:** Every dictation is saved on the phone with its recording, the recognized text and the final text. Search it, replay it, copy or share it. Can be turned off.
 - **Text is never lost:** If you leave the field before transcription finishes, the text is copied to the clipboard instead of being typed somewhere else.
@@ -113,12 +114,19 @@ Prefer voice input as its own keyboard? Enable the **Boice** keyboard via *Open 
 
 ### AI post-processing (optional)
 
-The voice keyboard can show a **second, smaller microphone** that transcribes exactly like the main one, then sends the text to an LLM before inserting it. Use it to fix grammar and punctuation, reformat into bullet points, translate, or anything else you write a prompt for. The main microphone is untouched and stays fully offline.
+The voice keyboard's second microphone, **Dictate + AI**, applies your prompt before inserting the transcription. The main microphone gives you the original offline transcription.
 
-Set it up in the app under **Set up AI post-processing**:
+Open **Set up AI post-processing**, turn on **Enable AI post-processing**, and choose a provider.
 
-1. Turn on **Enable AI post-processing** — this is what makes the second mic appear on the keyboard.
-2. Pick a **preset** to fill in the address, then adjust it. Any OpenAI-compatible `/chat/completions` endpoint works:
+#### On-device Gemini Nano
+
+Choose **On-device Gemini Nano** and check the availability shown in settings. If Android needs model assets, tap **Download Gemini Nano** and confirm. Android AICore uses network access and storage for setup and updates. Inference and dictation text stay on-device. No URL or API key is needed.
+
+Try **Process test sentence** after the status shows the model is ready. Language support and output quality vary by model version. Android can block Gemini Nano while another app is in the foreground, even when the test in Boice settings works. If that happens, or if processing times out, exceeds the token limit, or returns an unusable result, Boice delivers the original transcription through its normal insertion or recovery path. [ML Kit device support and foreground restrictions](https://developers.google.com/ml-kit/genai)
+
+#### OpenAI-compatible server
+
+1. Pick a **preset** to fill in the address, then adjust it for your `/chat/completions` endpoint.
 
    | Server | Base URL |
    |---|---|
@@ -131,9 +139,10 @@ Set it up in the app under **Set up AI post-processing**:
    | Anthropic | `https://api.anthropic.com/v1` |
 
    For a server on your own machine, replace `localhost` with that machine's LAN IP — `localhost` on a phone means the phone. Ollama also needs `OLLAMA_HOST=0.0.0.0` to accept connections from other devices.
-3. Enter the **API key** (leave empty for local servers) and the **model** name.
-4. Edit the **prompt** if you want. `${output}` is replaced with what you dictated; leave the placeholder out and your prompt is sent as an instruction with the transcription as a separate message.
-5. Hit **Send test sentence** to confirm it all works before relying on it mid-typing.
+2. Enter the **API key** (leave empty for local servers) and the **model** name.
+3. Use **Send test sentence** to check the connection.
+
+Both providers use the **Prompt** setting. Put `${output}` where you want the dictation to go. If you omit it, the provider receives the prompt as instructions and the transcription as input.
 
 The separate **Selected-text editing** settings page controls the wand. It reuses
 the AI post-processing server, API key and model by default; you can override only the
@@ -179,7 +188,7 @@ The built-in Parakeet model works out of the box. Under **Manage speech models**
 - **Built-in model:** Parakeet Ultra (Moondream's post-trained NVIDIA Parakeet TDT 0.6B v3), Q4_K_M GGUF, about 485 MB, shipped inside the APK. Nothing is downloaded at first launch.
 - **Streaming:** models that support it (Nemotron streaming) transcribe while you speak; the others transcribe after you stop.
 - **Integration:** an input method (IME), a `RecognitionService` for apps that use Android's `SpeechRecognizer`, and a `RECOGNIZE_SPEECH` activity for keyboards that fire the speech intent.
-- **AI:** a plain OpenAI-compatible `/chat/completions` client with no SDK. Connect timeout 10 s, reply timeout 45 s.
+- **AI:** OpenAI-compatible `/chat/completions` with a 10 s connection timeout and 45 s reply timeout. Gemini Nano uses the ML Kit GenAI Prompt API with a 15 s request budget.
 - **Platform:** Android 8.0+ (API 26), target API 36, arm64-v8a only.
 - **Storage:** settings, models and history (SQLite plus WAV files) live in app-private storage. History is excluded from backups.
 
@@ -188,11 +197,11 @@ What leaves the phone:
 | Data | When | Where |
 |---|---|---|
 | Audio | Never | — |
-| Dictated text | Only with **Dictate + AI** | The server you configured |
+| Dictated text | With **Dictate + AI** when the server provider is selected | The server you configured |
 | Selected text and your spoken instruction (as text) | Only when you use the wand | The server you configured |
 | API key | With those requests | The server you configured |
 
-The internet permission exists only for these requests. With AI post-processing off, the app makes no network connections.
+Gemini Nano processes prompts, inputs and results on-device. AICore may connect to download or update the model. Google ML Kit may send diagnostic and usage metrics, such as device information, input and output sizes, and latency. [ML Kit data disclosure](https://developers.google.com/ml-kit/android-data-disclosure)
 
 Other permissions: microphone (dictation), screen capture and display over other apps (live subtitles), notifications (the subtitles service notice).
 

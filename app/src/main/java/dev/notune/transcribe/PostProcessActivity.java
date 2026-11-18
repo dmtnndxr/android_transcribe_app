@@ -3,25 +3,34 @@ package dev.notune.transcribe;
 import android.os.Bundle;
 import android.text.Editable;
 import android.text.TextWatcher;
+import android.text.format.Formatter;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.AutoCompleteTextView;
 import android.widget.PopupMenu;
+import android.widget.RadioGroup;
 import android.widget.Spinner;
 import android.widget.TextView;
 
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.google.android.material.button.MaterialButton;
+import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.google.android.material.materialswitch.MaterialSwitch;
 import com.google.android.material.snackbar.Snackbar;
 import com.google.android.material.textfield.TextInputEditText;
+import com.google.mlkit.genai.common.DownloadCallback;
+import com.google.mlkit.genai.common.FeatureStatus;
+import com.google.mlkit.genai.common.GenAiException;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.concurrent.Future;
+import java.util.concurrent.FutureTask;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Configures LLM post-processing: the endpoint, credentials, model and prompt
@@ -71,6 +80,22 @@ public class PostProcessActivity extends AppCompatActivity {
     private TextView cleartextWarning;
     private TextView testResult;
     private MaterialButton testButton;
+    private PostProcessPrefs.Provider provider;
+    private View serverGroup;
+    private View serverPrivacy;
+    private View nanoGroup;
+    private TextView promptDescription;
+    private TextView testDescription;
+    private TextView nanoStatus;
+    private MaterialButton nanoDownload;
+    private MaterialButton nanoRefresh;
+    private Future<?> nanoTask;
+    private Future<?> testTask;
+    private int nanoStatusGeneration;
+    private int testGeneration;
+    private int nanoFeature = FeatureStatus.UNAVAILABLE;
+    private boolean resumed;
+    private final Runnable refreshNano = () -> runNanoStatus(false);
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -99,6 +124,42 @@ public class PostProcessActivity extends AppCompatActivity {
         cleartextWarning = findViewById(R.id.text_pp_cleartext_warning);
         testResult = findViewById(R.id.text_pp_test_result);
         testButton = findViewById(R.id.btn_pp_test);
+        serverGroup = findViewById(R.id.pp_server_group);
+        serverPrivacy = findViewById(R.id.text_pp_server_privacy);
+        nanoGroup = findViewById(R.id.pp_nano_group);
+        promptDescription = findViewById(R.id.text_pp_prompt_desc);
+        testDescription = findViewById(R.id.text_pp_test_desc);
+        nanoStatus = findViewById(R.id.text_pp_nano_status);
+        nanoDownload = findViewById(R.id.btn_pp_nano_download);
+        nanoRefresh = findViewById(R.id.btn_pp_nano_refresh);
+
+        provider = PostProcessPrefs.getProvider(this);
+        RadioGroup providers = findViewById(R.id.pp_provider_group);
+        providers.check(usesNano() ? R.id.pp_provider_nano : R.id.pp_provider_server);
+        providers.setOnCheckedChangeListener((group, checked) -> {
+            if (checked == View.NO_ID) return;
+            PostProcessPrefs.Provider selected = checked == R.id.pp_provider_nano
+                    ? PostProcessPrefs.Provider.GEMINI_NANO
+                    : PostProcessPrefs.Provider.OPENAI_COMPATIBLE;
+            if (selected == provider) return;
+            if (!PostProcessPrefs.setProvider(this, selected)) {
+                group.check(usesNano() ? R.id.pp_provider_nano : R.id.pp_provider_server);
+                snackbar(getString(R.string.pp_provider_save_failed));
+                return;
+            }
+            if (!usesNano()) saveServer();
+            provider = selected;
+            clearTest();
+            updateProviderUi();
+            runNanoStatus(false);
+        });
+        nanoRefresh.setOnClickListener(v -> runNanoStatus(false));
+        nanoDownload.setOnClickListener(v -> new MaterialAlertDialogBuilder(this)
+                .setTitle(R.string.pp_nano_download)
+                .setMessage(R.string.pp_nano_download_consent)
+                .setNegativeButton(android.R.string.cancel, null)
+                .setPositiveButton(R.string.pp_nano_download, (dialog, which) -> runNanoStatus(true))
+                .show());
 
         baseUrlEdit.setText(PostProcessPrefs.getBaseUrl(this));
         apiKeyEdit.setText(PostProcessPrefs.getApiKey(this));
@@ -109,8 +170,9 @@ public class PostProcessActivity extends AppCompatActivity {
         enabledSwitch.setOnCheckedChangeListener((v, checked) -> {
             PostProcessPrefs.setEnabled(this, checked);
             applyEnabledState(checked);
+            if (checked) runNanoStatus(false);
+            else clearTest();
         });
-        applyEnabledState(enabledSwitch.isChecked());
 
         setupPresetSpinner();
 
@@ -150,6 +212,7 @@ public class PostProcessActivity extends AppCompatActivity {
             });
             menu.show();
         });
+        applyEnabledState(enabledSwitch.isChecked());
     }
 
     /** Before the server's list arrives, offer the presets' suggestions. */
@@ -171,6 +234,7 @@ public class PostProcessActivity extends AppCompatActivity {
      * field gets focus; {@code force} (the button) also retries after an error.
      */
     private void loadModels(boolean force) {
+        if (usesNano() || !enabledSwitch.isChecked()) return;
         String baseUrl = text(baseUrlEdit);
         if (baseUrl.isEmpty()) {
             if (force) modelsStatus.setText(R.string.pp_models_need_url);
@@ -192,7 +256,7 @@ public class PostProcessActivity extends AppCompatActivity {
             final List<String> finalIds = ids;
             final String finalError = error;
             runOnUiThread(() -> {
-                if (isFinishing()) return;
+                if (isFinishing() || isDestroyed()) return;
                 loadModelsButton.setEnabled(true);
                 if (finalIds == null) {
                     modelsLoadedFor = null;
@@ -201,22 +265,37 @@ public class PostProcessActivity extends AppCompatActivity {
                     setModelChoices(finalIds);
                     modelsStatus.setText(getResources().getQuantityString(
                             R.plurals.pp_models_loaded, finalIds.size(), finalIds.size()));
-                    if (modelEdit.hasFocus()) modelEdit.showDropDown();
+                    if (!usesNano() && modelEdit.hasFocus()) modelEdit.showDropDown();
                 }
             });
         }, "list-models").start();
     }
 
     @Override
+    protected void onResume() {
+        super.onResume();
+        resumed = true;
+        runNanoStatus(false);
+    }
+
+    @Override
     protected void onPause() {
+        resumed = false;
+        nanoStatus.removeCallbacks(refreshNano);
         super.onPause();
         save();
     }
 
+    @Override
+    protected void onDestroy() {
+        nanoStatusGeneration++;
+        if (nanoTask != null) nanoTask.cancel(true);
+        clearTest();
+        super.onDestroy();
+    }
+
     private void save() {
-        PostProcessPrefs.setBaseUrl(this, text(baseUrlEdit));
-        PostProcessPrefs.setApiKey(this, text(apiKeyEdit));
-        PostProcessPrefs.setModel(this, text(modelEdit));
+        if (!usesNano()) saveServer();
 
         // Storing the default verbatim would freeze it: a later change to
         // DEFAULT_PROMPT wouldn't reach users who never edited theirs. Clearing
@@ -224,6 +303,12 @@ public class PostProcessActivity extends AppCompatActivity {
         String prompt = text(promptEdit);
         PostProcessPrefs.setPrompt(this,
                 prompt.equals(PostProcessPrefs.DEFAULT_PROMPT) ? "" : prompt);
+    }
+
+    private void saveServer() {
+        PostProcessPrefs.setBaseUrl(this, text(baseUrlEdit));
+        PostProcessPrefs.setApiKey(this, text(apiKeyEdit));
+        PostProcessPrefs.setModel(this, text(modelEdit));
     }
 
     private static String text(TextView edit) {
@@ -293,6 +378,99 @@ public class PostProcessActivity extends AppCompatActivity {
     private void applyEnabledState(boolean enabled) {
         setGroupEnabled(configGroup, enabled);
         configGroup.setAlpha(enabled ? 1.0f : 0.5f);
+        updateProviderUi();
+    }
+
+    private boolean usesNano() {
+        return provider == PostProcessPrefs.Provider.GEMINI_NANO;
+    }
+
+    private void updateProviderUi() {
+        boolean nano = usesNano();
+        serverGroup.setVisibility(nano ? View.GONE : View.VISIBLE);
+        serverPrivacy.setVisibility(nano ? View.GONE : View.VISIBLE);
+        nanoGroup.setVisibility(nano ? View.VISIBLE : View.GONE);
+        promptDescription.setText(nano ? R.string.pp_nano_prompt_desc : R.string.pp_prompt_desc);
+        testDescription.setText(nano ? R.string.pp_nano_test_desc : R.string.pp_test_desc);
+        testButton.setText(nano ? R.string.pp_nano_test : R.string.pp_test);
+        updateActionButtons();
+    }
+
+    private void updateActionButtons() {
+        boolean enabled = enabledSwitch.isChecked();
+        nanoRefresh.setEnabled(enabled && nanoTask == null);
+        nanoDownload.setVisibility(nanoFeature == FeatureStatus.DOWNLOADABLE
+                && nanoTask == null ? View.VISIBLE : View.GONE);
+        nanoDownload.setEnabled(enabled);
+        testButton.setEnabled(enabled && testTask == null && (!usesNano()
+                || (nanoTask == null && nanoFeature == FeatureStatus.AVAILABLE)));
+    }
+
+    private void runNanoStatus(boolean download) {
+        if (!resumed || !enabledSwitch.isChecked() || !usesNano() || nanoTask != null) return;
+        nanoStatus.removeCallbacks(refreshNano);
+        final int generation = ++nanoStatusGeneration;
+        nanoStatus.setText(download ? R.string.pp_nano_downloading : R.string.pp_nano_checking);
+        FutureTask<Void> task = new FutureTask<>(() -> {
+            int status = FeatureStatus.UNAVAILABLE;
+            int error = 0;
+            try (GeminiNano nano = new GeminiNano(getApplicationContext())) {
+                if (download) {
+                    AtomicReference<GenAiException> downloadError = new AtomicReference<>();
+                    nano.download(new DownloadCallback() {
+                        @Override public void onDownloadProgress(long bytes) {
+                            runOnUiThread(() -> {
+                                if (generation == nanoStatusGeneration && nanoTask != null) {
+                                    nanoStatus.setText(getString(R.string.pp_nano_download_progress,
+                                            Formatter.formatShortFileSize(PostProcessActivity.this, bytes)));
+                                }
+                            });
+                        }
+
+                        @Override public void onDownloadFailed(GenAiException failure) {
+                            downloadError.set(failure);
+                        }
+                    });
+                    if (downloadError.get() != null) error = GeminiNano.errorMessage(downloadError.get());
+                }
+                status = nano.checkStatus();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return;
+            } catch (Exception | LinkageError e) {
+                error = GeminiNano.errorMessage(e);
+            }
+            final int result = status;
+            final int failure = error;
+            runOnUiThread(() -> finishNanoStatus(generation, download, result, failure));
+        }, null);
+        nanoTask = task;
+        new Thread(task, "gemini-nano-status").start();
+        updateActionButtons();
+    }
+
+    private void finishNanoStatus(int generation, boolean download, int status, int error) {
+        if (generation != nanoStatusGeneration || isFinishing()) return;
+        nanoTask = null;
+        if (error == 0) {
+            nanoFeature = status;
+            switch (status) {
+                case FeatureStatus.AVAILABLE: nanoStatus.setText(R.string.pp_nano_ready); break;
+                case FeatureStatus.DOWNLOADABLE:
+                    nanoStatus.setText(R.string.pp_nano_downloadable);
+                    break;
+                case FeatureStatus.DOWNLOADING:
+                    nanoStatus.setText(R.string.pp_nano_downloading);
+                    if (resumed) nanoStatus.postDelayed(refreshNano, 4000);
+                    break;
+                default: nanoStatus.setText(R.string.pp_nano_unavailable);
+            }
+        } else {
+            nanoFeature = download ? FeatureStatus.DOWNLOADABLE : FeatureStatus.UNAVAILABLE;
+            nanoStatus.setText(download ? getString(R.string.pp_nano_download_failed, getString(error))
+                    : getString(error));
+        }
+        updateActionButtons();
     }
 
     /** Enables/disables a whole subtree — Android does not cascade this. */
@@ -313,39 +491,44 @@ public class PostProcessActivity extends AppCompatActivity {
     private void runTest() {
         save();
 
-        if (PostProcessPrefs.getBaseUrl(this).isEmpty()
-                || PostProcessPrefs.getModel(this).isEmpty()) {
+        if (!PostProcessPrefs.isConfigured(this)) {
             showTestResult(getString(R.string.pp_test_incomplete), true);
             return;
         }
 
-        testButton.setEnabled(false);
-        showTestResult(getString(R.string.pp_test_running), false);
-
-        final String baseUrl = PostProcessPrefs.getBaseUrl(this);
-        final String apiKey = PostProcessPrefs.getApiKey(this);
-        final String model = PostProcessPrefs.getModel(this);
-        final String prompt = PostProcessPrefs.getPrompt(this);
-
-        new Thread(() -> {
-            String message;
-            boolean isError;
-            try {
-                String out = PostProcessClient.process(
-                        baseUrl, apiKey, model, prompt, TEST_TRANSCRIPT);
-                message = getString(R.string.pp_test_ok, TEST_TRANSCRIPT, out);
-                isError = false;
-            } catch (PostProcessClient.PostProcessException e) {
-                message = getString(R.string.pp_test_failed, e.getMessage());
-                isError = true;
+        int generation = ++testGeneration;
+        boolean nano = usesNano();
+        String sample = nano ? getString(R.string.onb_ai_sample) : TEST_TRANSCRIPT;
+        showTestResult(getString(nano ? R.string.ime_ai_working : R.string.pp_test_running), false);
+        testTask = PostProcessor.processAsync(this, provider, sample,
+                new PostProcessor.Callback() {
+            @Override public void onSuccess(String text) {
+                runOnUiThread(() -> finishTest(generation,
+                        getString(nano ? R.string.pp_nano_test_ok : R.string.pp_test_ok,
+                                sample, text), false));
             }
-            final String finalMessage = message;
-            final boolean finalIsError = isError;
-            runOnUiThread(() -> {
-                testButton.setEnabled(true);
-                showTestResult(finalMessage, finalIsError);
-            });
-        }, "post-process-test").start();
+
+            @Override public void onFailure(String message) {
+                runOnUiThread(() -> finishTest(generation,
+                        getString(R.string.pp_test_failed, message), true));
+            }
+        });
+        updateActionButtons();
+    }
+
+    private void finishTest(int generation, String message, boolean isError) {
+        if (generation != testGeneration || isFinishing()) return;
+        testTask = null;
+        showTestResult(message, isError);
+        updateActionButtons();
+    }
+
+    private void clearTest() {
+        testGeneration++;
+        if (testTask != null) testTask.cancel(true);
+        testTask = null;
+        testResult.setVisibility(View.GONE);
+        updateActionButtons();
     }
 
     private void showTestResult(String message, boolean isError) {
