@@ -993,6 +993,7 @@ public class RustInputMethodService extends InputMethodService {
                     HistoryStore.finish(RustInputMethodService.this, historyId, null,
                             target.text, HistoryStore.OUTCOME_FAILED, message);
                     finishOperation(getString(R.string.ime_edit_failed, message));
+                    DoneHaptics.play(RustInputMethodService.this);
                 });
             }
         });
@@ -1040,6 +1041,7 @@ public class RustInputMethodService extends InputMethodService {
             statusView.setText(statusMessage != null
                     ? statusMessage : getString(R.string.ime_text_inserted));
         }
+        DoneHaptics.play(this);
         if (pendingSwitchBack) {
             pendingSwitchBack = false;
             switchToPreviousInputMethod();
@@ -1197,12 +1199,14 @@ public class RustInputMethodService extends InputMethodService {
             TranscriptRescue.rescue(this, replacement, true);
             keepPendingText(replacement);
             finishOperation("Tap to Record");
+            DoneHaptics.play(this);
             return;
         }
         if (target.text.equals(replacement)) {
             HistoryStore.finish(this, historyId, replacement, target.text,
                     HistoryStore.OUTCOME_UNCHANGED, null);
             finishOperation(getString(R.string.ime_edit_no_change));
+            DoneHaptics.play(this);
             return;
         }
 
@@ -1216,6 +1220,7 @@ public class RustInputMethodService extends InputMethodService {
         HistoryStore.finish(this, historyId, replacement, target.text,
                 HistoryStore.OUTCOME_INSERTED, null);
         finishOperation(getString(R.string.ime_change_applied));
+        DoneHaptics.play(this);
     }
 
     /** Offers a guarded undo: it only runs if our inserted range is unchanged. */
