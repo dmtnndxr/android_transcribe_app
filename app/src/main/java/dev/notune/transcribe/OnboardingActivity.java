@@ -34,6 +34,7 @@ import java.io.File;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.Future;
 
 /**
  * First-run setup. Android doesn't let an app enable its own keyboard or make
@@ -91,10 +92,11 @@ public class OnboardingActivity extends AppCompatActivity {
     private LinearLayout flow, status;
     private ImageView statusIcon;
     private EditText tryField;
-    /** Result of the AI connection test on this screen, kept across re-renders. */
+    /** Result of the provider test on this screen, kept across re-renders. */
     private String aiTestResult;
     private boolean aiTestOk;
-    private boolean aiTesting;
+    private Future<?> aiTestTask;
+    private PostProcessPrefs.Provider aiTestProvider;
     private MaterialButton action, action2, back, next;
 
     public static boolean isDone(Context ctx) {
@@ -332,7 +334,9 @@ public class OnboardingActivity extends AppCompatActivity {
     private void renderAi() {
         title.setText(R.string.onb_ai_title);
         body.setText(getString(R.string.onb_ai_body, appName));
-        boolean ready = PostProcessPrefs.isEnabled(this) && PostProcessPrefs.isConfigured(this);
+        boolean ready = PostProcessPrefs.isConfigured(this);
+        PostProcessPrefs.Provider provider = PostProcessPrefs.getProvider(this);
+        boolean nano = provider == PostProcessPrefs.Provider.GEMINI_NANO;
         if (!ready) {
             example.setVisibility(View.VISIBLE);
             example.setText(R.string.onb_ai_example);
@@ -343,51 +347,53 @@ public class OnboardingActivity extends AppCompatActivity {
             return;
         }
 
-        // Configured: check the connection, try it.
-        if (aiTesting) {
-            showStatus(true, getString(R.string.pp_test_running));
-        } else if (aiTestResult != null) {
+        if (aiTestTask != null && provider == aiTestProvider) {
+            showStatus(true, getString(nano ? R.string.ime_ai_working : R.string.pp_test_running));
+        } else if (aiTestResult != null && provider == aiTestProvider) {
             showStatus(aiTestOk, aiTestResult);
         } else {
-            showStatus(true, getString(R.string.onb_ai_on_model, PostProcessPrefs.getModel(this)));
+            String name = nano ? getString(R.string.pp_provider_nano) : PostProcessPrefs.getModel(this);
+            showStatus(true, getString(R.string.onb_ai_on_model, name));
         }
-        showAction(action, getString(R.string.onb_ai_test), v -> runAiTest());
+        showAction(action, getString(nano ? R.string.pp_nano_test : R.string.onb_ai_test),
+                v -> runAiTest(provider));
         showAction(action2, getString(R.string.onb_ai_change),
                 v -> startActivity(new Intent(this, PostProcessActivity.class)));
         tryField.setVisibility(View.VISIBLE);
         tryField.setHint(R.string.onb_ai_try_hint);
     }
 
-    /** Sends one sample sentence through the configured server, model and prompt. */
-    private void runAiTest() {
-        aiTesting = true;
+    private void runAiTest(PostProcessPrefs.Provider provider) {
+        if (aiTestTask != null) return;
+        aiTestProvider = provider;
         aiTestResult = null;
-        render();
         final String sample = getString(R.string.onb_ai_sample);
-        final String baseUrl = PostProcessPrefs.getBaseUrl(this);
-        final String apiKey = PostProcessPrefs.getApiKey(this);
-        final String model = PostProcessPrefs.getModel(this);
-        final String prompt = PostProcessPrefs.getPrompt(this);
-        new Thread(() -> {
-            String result;
-            boolean ok;
-            try {
-                result = getString(R.string.onb_ai_test_ok, sample,
-                        PostProcessClient.process(baseUrl, apiKey, model, prompt, sample));
-                ok = true;
-            } catch (PostProcessClient.PostProcessException e) {
-                result = getString(R.string.pp_test_failed, e.getMessage());
-                ok = false;
+        final boolean nano = provider == PostProcessPrefs.Provider.GEMINI_NANO;
+        aiTestTask = PostProcessor.processAsync(this, provider, sample, new PostProcessor.Callback() {
+            @Override public void onSuccess(String text) {
+                runOnUiThread(() -> finishAiTest(getString(nano ? R.string.pp_nano_test_ok
+                        : R.string.onb_ai_test_ok, sample, text), true));
             }
-            final String r = result;
-            final boolean o = ok;
-            runOnUiThread(() -> {
-                aiTesting = false;
-                aiTestResult = r;
-                aiTestOk = o;
-                if (step == STEP_AI) render();
-            });
-        }, "onboarding-ai-test").start();
+
+            @Override public void onFailure(String message) {
+                runOnUiThread(() -> finishAiTest(getString(R.string.pp_test_failed, message), false));
+            }
+        });
+        render();
+    }
+
+    private void finishAiTest(String result, boolean success) {
+        if (isFinishing() || isDestroyed()) return;
+        aiTestTask = null;
+        aiTestResult = result;
+        aiTestOk = success;
+        if (step == STEP_AI) render();
+    }
+
+    @Override
+    protected void onDestroy() {
+        if (aiTestTask != null) aiTestTask.cancel(true);
+        super.onDestroy();
     }
 
     private void renderDone() {

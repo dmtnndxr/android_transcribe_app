@@ -81,6 +81,7 @@
                     </LinearLayout>
 
                     <TextView
+                        android:id="@+id/text_pp_server_privacy"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:text="@string/pp_privacy_warning"
@@ -98,8 +99,77 @@
                 android:layout_height="wrap_content"
                 android:orientation="vertical">
 
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/pp_provider"
+                    android:textAppearance="?attr/textAppearanceTitleMedium" />
+
+                <RadioGroup
+                    android:id="@+id/pp_provider_group"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="16dp">
+
+                    <com.google.android.material.radiobutton.MaterialRadioButton
+                        android:id="@+id/pp_provider_server"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="@string/pp_provider_server" />
+
+                    <com.google.android.material.radiobutton.MaterialRadioButton
+                        android:id="@+id/pp_provider_nano"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="@string/pp_provider_nano" />
+                </RadioGroup>
+
+                <com.google.android.material.card.MaterialCardView
+                    android:id="@+id/pp_nano_group"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="16dp"
+                    android:visibility="gone"
+                    app:contentPadding="16dp">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="@string/pp_nano_privacy"
+                            android:textAppearance="?attr/textAppearanceBodyMedium" />
+
+                        <TextView
+                            android:id="@+id/text_pp_nano_status"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="8dp"
+                            android:accessibilityLiveRegion="polite"
+                            android:textAppearance="?attr/textAppearanceBodyMedium" />
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btn_pp_nano_download"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:visibility="gone"
+                            android:text="@string/pp_nano_download" />
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btn_pp_nano_refresh"
+                            style="@style/Widget.Material3.Button.TextButton"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/pp_nano_refresh" />
+                    </LinearLayout>
+                </com.google.android.material.card.MaterialCardView>
+
                 <!-- Connection -->
                 <com.google.android.material.card.MaterialCardView
+                    android:id="@+id/pp_server_group"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginBottom="16dp"
@@ -240,6 +310,7 @@
                             android:layout_marginBottom="4dp"/>
 
                         <TextView
+                            android:id="@+id/text_pp_prompt_desc"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:text="@string/pp_prompt_desc"
@@ -305,6 +376,7 @@
                             android:layout_marginBottom="4dp"/>
 
                         <TextView
+                            android:id="@+id/text_pp_test_desc"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:text="@string/pp_test_desc"
