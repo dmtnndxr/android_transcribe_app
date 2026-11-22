@@ -16,7 +16,7 @@ Private speech-to-text for Android. Speech is transcribed on the phone and typed
 - **Works with the keyboard you already use.** Tap the microphone in SwiftKey, HeliBoard and others, or use the built-in voice keyboard.
 - **Edit text by voice.** Select text, tap the wand, say "make this shorter" or "translate to German".
 - **Your own AI, or none.** Cleanup and editing work with any OpenAI-compatible server, including a local Ollama or LM Studio. Off by default.
-- **Nothing gets lost.** If the text field is gone when transcription finishes, the text goes to the clipboard, and every dictation is kept in an on-device history with its recording.
+- **Nothing gets lost.** If the text field is gone when transcription finishes, the text goes to the clipboard, and every dictation is kept in an on-device history with its recording, saved while you speak: one that was interrupted can be transcribed again.
 - **Free and open source** (MIT).
 
 ## Install
@@ -109,7 +109,7 @@ Tap **Try voice input** on the home screen to test the whole flow in one tap.
 
 ### Dedicated voice keyboard (optional)
 
-Prefer voice input as its own keyboard? Enable the **Boice** keyboard via *Open Keyboard Settings* on the home screen, switch to it from your keyboard switcher, then tap **Tap to Record**. By default the recording keeps running even if you switch apps or the keyboard closes (turn off *Record in background* in settings if you don't want that) — the text is inserted when you come back.
+Prefer voice input as its own keyboard? Enable the **Boice** keyboard via *Open Keyboard Settings* on the home screen, switch to it from your keyboard switcher, then tap **Tap to Record**. With notifications allowed, the recording keeps running if you switch apps or the keyboard closes, and a notification lets you stop or cancel it; it stops by itself after an hour. The text is inserted when you come back, or copied to the clipboard. Without notifications, or with *Record in background* off, recording stops when the keyboard closes and is kept.
 
 ### AI post-processing (optional)
 

@@ -1,0 +1,10 @@
+- recording in the background now really records: before, Android muted the microphone once the keyboard was hidden
+- a notification shows the recording, with Stop and Cancel; a vibration every 10 minutes, and it stops by itself after an hour
+- without notification permission, or with "Record in background" off, hiding the keyboard stops the recording and keeps it
+- recordings are saved while you speak and survive errors and killed processes
+- history shows what is recognized fully, partly or not at all, and can transcribe a recording again
+- long recordings and shared audio files are transcribed a minute at a time, without running out of memory; transcription can be canceled
+- "Load models" works with OpenRouter's long model list
+- long silence at the start and end is left out; auto-stop works in noisy rooms
+- fixes from Offline Voice Input 0.2.x: model changes without a keyboard restart, safer first model unpacking, retry after an error, TalkBack, Chrome voice search, more translated texts
+- debug log without dictated text, to share when something goes wrong
