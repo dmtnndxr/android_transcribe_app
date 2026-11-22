@@ -45,6 +45,12 @@ public final class PostProcessClient {
     static final int READ_TIMEOUT_MS = 45_000;
     /** Guards against a runaway model filling the text field. */
     static final int MAX_RESPONSE_BYTES = 256 * 1024;
+    /**
+     * Cap for the {@code /models} listing. OpenRouter's runs to several MB
+     * (descriptions, pricing and parameters for hundreds of models), far past
+     * what a chat reply needs, so it gets its own, roomier limit.
+     */
+    static final int MAX_MODEL_LIST_BYTES = 16 * 1024 * 1024;
     static final int MAX_OUTPUT_TOKENS = 2048;
     /**
      * Upper bound for a selection edit. Providers reject a max_tokens above
@@ -325,7 +331,7 @@ public final class PostProcessClient {
                 throw new PostProcessException(
                         describeHttpError(status, readAll(conn.getErrorStream())));
             }
-            return parseModelIds(readAll(conn.getInputStream()));
+            return parseModelIds(readAll(conn.getInputStream(), MAX_MODEL_LIST_BYTES));
         } catch (SocketTimeoutException e) {
             throw new PostProcessException("the server took too long to respond");
         } catch (UnknownHostException e) {
@@ -617,6 +623,10 @@ public final class PostProcessClient {
     }
 
     private static String readAll(InputStream in) throws IOException {
+        return readAll(in, MAX_RESPONSE_BYTES);
+    }
+
+    private static String readAll(InputStream in, int maxBytes) throws IOException {
         if (in == null) return "";
         try (ByteArrayOutputStream out = new ByteArrayOutputStream()) {
             byte[] buf = new byte[8192];
@@ -624,7 +634,7 @@ public final class PostProcessClient {
             int total = 0;
             while ((read = in.read(buf)) != -1) {
                 total += read;
-                if (total > MAX_RESPONSE_BYTES) {
+                if (total > maxBytes) {
                     throw new IOException("response too large");
                 }
                 out.write(buf, 0, read);

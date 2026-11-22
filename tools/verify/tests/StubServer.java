@@ -45,7 +45,7 @@ final class StubServer implements AutoCloseable {
 
     StubServer(Handler handler) throws IOException {
         server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
-        server.createContext("/v1/chat/completions", exchange -> {
+        com.sun.net.httpserver.HttpHandler route = exchange -> {
             Captured c = new Captured();
             c.method = exchange.getRequestMethod();
             c.authorization = exchange.getRequestHeaders().getFirst("Authorization");
@@ -58,7 +58,9 @@ final class StubServer implements AutoCloseable {
             } finally {
                 exchange.close();
             }
-        });
+        };
+        server.createContext("/v1/chat/completions", route);
+        server.createContext("/v1/models", route);
         server.setExecutor(null);
         server.start();
     }

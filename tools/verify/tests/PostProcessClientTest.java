@@ -97,6 +97,24 @@ class PostProcessClientTest {
             assertThrows(PostProcessClient.PostProcessException.class,
                     () -> PostProcessClient.parseModelIds("{\"models\":[]}"));
         }
+
+        @Test
+        @DisplayName("accepts a listing far larger than a chat reply (OpenRouter's is MBs)")
+        void largeListing() throws Exception {
+            StringBuilder json = new StringBuilder("{\"data\":[");
+            String filler = "x".repeat(2000);
+            int i = 0;
+            while (json.length() < 4 * PostProcessClient.MAX_RESPONSE_BYTES) {
+                if (i > 0) json.append(',');
+                json.append("{\"id\":\"m").append(i++)
+                        .append("\",\"description\":\"").append(filler).append("\"}");
+            }
+            json.append("]}");
+            try (StubServer server = new StubServer(
+                    (exchange, captured) -> StubServer.replyRaw(exchange, 200, json.toString()))) {
+                assertEquals(i, PostProcessClient.listModels(server.baseUrl(), "k").size());
+            }
+        }
     }
 
     // ------------------------------------------------------------ Request
