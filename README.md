@@ -194,7 +194,7 @@ What leaves the phone:
 
 The internet permission exists only for these requests. With AI post-processing off, the app makes no network connections.
 
-Other permissions: microphone (dictation), screen capture and display over other apps (live subtitles), notifications (the notices shown while recording and while subtitles run).
+Other permissions: microphone (dictation), screen capture and display over other apps (live subtitles), notifications (the notices shown while recording, while transcribing and while subtitles run).
 
 ## Prerequisites
 

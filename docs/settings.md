@@ -23,7 +23,7 @@ history is excluded from cloud backup and device-to-device transfer.
 | **Pause audio** | Off | Pauses music or a podcast while you record and resumes it afterwards. |
 | **Select transcription** | Off | Leaves the inserted text highlighted, so one Backspace deletes it and typing replaces it. |
 | **Copy to clipboard if there's no text field** | On | See [When the text has nowhere to go](#when-the-text-has-nowhere-to-go). |
-| **Record in background** | On | Recording continues when the voice keyboard is hidden or you switch apps, with a notification that has a Stop button. Turn it off to stop recording whenever the keyboard closes. |
+| **Record in background** | On | Recording continues when the voice keyboard is hidden or you switch apps, with a notification that has Stop and Cancel. The phone vibrates every 10 minutes while it records, and recording stops by itself after an hour. Needs notifications: without them, or with this off, recording stops when the keyboard closes and what you said is kept. |
 | **Auto-stop after silence** | Off | The voice-input popup (the panel other keyboards open) stops by itself about 2 seconds after you stop speaking. Doesn't affect the voice keyboard. |
 | **Subtitle length** | 2 lines | How many lines live subtitles show: 2, 4 or all. |
 
@@ -163,7 +163,7 @@ How it behaves:
 | Setting | Default | What it does |
 |---|---|---|
 | **Keep history** | On | Saves each dictation: recognized text, the final text after AI or a voice edit, and where it went. |
-| **Keep recordings** | On | Saves the audio while you speak, about 2 MB per minute. A dictation that was interrupted, failed or had no recognized speech stays in the history as a recording. |
+| **Keep recordings** | On | Saves the audio while you speak, about 2 MB per minute. A dictation that was interrupted, failed or had no recognized speech stays in the history as a recording. Each entry says whether it was recognized fully, partly or not at all; **Transcribe again** redoes it with the current model. |
 | **Keep recordings for** | Always | Always, 1, 7 or 30 days. After that the audio is deleted and the text stays. |
 | **Clear history** | — | In the menu. Deletes all texts and recordings. |
 
@@ -190,7 +190,8 @@ audio playing on the device are produced on the phone.
 - **Share debug log**: a text file with recording starts and stops, microphone
   muting, errors, why the app's processes last exited, the app and Android
   versions and the phone model. No dictated text, audio or keys. It leaves the
-  phone only when you share it.
+  phone only when you share it, or copy it with
+  `adb pull /sdcard/Android/data/io.github.dmtnndxr.boice/files/logs`.
 - **Run benchmark**: transcribes a built-in 11-second English recording with
   the active model and reports the speed as a multiple of real time. Use it to
   compare models and thread counts on your phone.

@@ -6,4 +6,5 @@
     <exclude domain="file" path="history/" />
     <exclude domain="file" path="capture_tmp/" />
     <exclude domain="file" path="logs/" />
+    <exclude domain="external" path="logs/" />
 </full-backup-content>

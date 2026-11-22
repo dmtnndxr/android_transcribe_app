@@ -18,7 +18,7 @@ public class App extends Application {
             DebugLog.crash(this, error);
             if (next != null) next.uncaughtException(thread, error);
         });
-        DebugLog.event(this, "process start");
+        DebugLog.processStarted(this);
         ThemePrefs.apply(this);
         DynamicColors.applyToActivitiesIfAvailable(this);
     }

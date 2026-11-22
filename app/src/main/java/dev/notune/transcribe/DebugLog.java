@@ -22,7 +22,9 @@ import java.util.concurrent.Executors;
 
 /**
  * A small on-device log for "what happened to my dictation": recording start
- * and stop, muting, errors. It leaves the phone only when the user shares it.
+ * and stop, muting, errors. It stays on the phone unless the user shares it or
+ * pulls it over adb, which is why it is in app-specific external storage:
+ * {@code adb pull /sdcard/Android/data/<package>/files/logs}.
  *
  * <p>Never log dictated or selected text, prompts, AI replies (including their
  * error messages, which can quote the request or the key), keys, or the app
@@ -37,9 +39,33 @@ final class DebugLog {
     private DebugLog() {}
 
     static void event(Context ctx, String message) {
-        File dir = new File(ctx.getFilesDir(), "logs");
+        Context app = ctx.getApplicationContext();
         String line = line(message);
-        WRITER.execute(() -> append(dir, line));
+        WRITER.execute(() -> append(logDir(app), line));
+    }
+
+    /**
+     * Logged once per process start, so a log pulled over adb also says which
+     * version this is and why the app's processes died before it.
+     */
+    static void processStarted(Context ctx) {
+        Context app = ctx.getApplicationContext();
+        event(app, "process start");
+        WRITER.execute(() -> {
+            try {
+                StringBuilder b = new StringBuilder("environment: ").append(environment(app));
+                appendExits(app, b, 4);
+                append(logDir(app), line(b.toString()));
+            } catch (Exception e) {
+                Log.w(TAG, "Can't log the environment", e);
+            }
+        });
+    }
+
+    private static File logDir(Context ctx) {
+        File external = ctx.getExternalFilesDir("logs");
+        // Null while shared storage is unavailable.
+        return external != null ? external : new File(ctx.getFilesDir(), "logs");
     }
 
     /** Logs where it failed, not the exception's message, which may quote user text. */
@@ -49,7 +75,7 @@ final class DebugLog {
 
     /** Synchronous: the process is about to die. */
     static void crash(Context ctx, Throwable t) {
-        append(new File(ctx.getFilesDir(), "logs"), line("crash" + describe(t)));
+        append(logDir(ctx), line("crash" + describe(t)));
     }
 
     private static String describe(Throwable t) {
@@ -96,22 +122,9 @@ final class DebugLog {
 
     /** Builds the file to share: versions, why the processes last exited, the log. */
     static File export(Context ctx) throws Exception {
-        StringBuilder head = new StringBuilder();
-        head.append("Boice ").append(ctx.getPackageManager()
-                .getPackageInfo(ctx.getPackageName(), 0).versionName).append('\n');
-        head.append("Android ").append(Build.VERSION.RELEASE).append(", ")
-                .append(Build.MANUFACTURER).append(' ').append(Build.MODEL).append('\n');
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            head.append("\n== process exits\n");
-            ActivityManager am = ctx.getSystemService(ActivityManager.class);
-            for (ApplicationExitInfo info : am.getHistoricalProcessExitReasons(null, 0, 20)) {
-                head.append(time(info.getTimestamp())).append(' ').append(info.getProcessName())
-                        .append(" reason=").append(exitReason(info.getReason()))
-                        .append(" status=").append(info.getStatus())
-                        .append(" importance=").append(info.getImportance())
-                        .append(" rssMB=").append(info.getRss() / 1024).append('\n');
-            }
-        }
+        StringBuilder head = new StringBuilder(environment(ctx));
+        appendExits(ctx, head, 20);
+        head.append('\n');
         head.append("\n== log\n");
 
         File dir = new File(ctx.getCacheDir(), "share");
@@ -120,11 +133,30 @@ final class DebugLog {
         try (OutputStream os = new FileOutputStream(out)) {
             os.write(head.toString().getBytes(StandardCharsets.UTF_8));
             for (String name : new String[]{"debug.1.log", "debug.log"}) {
-                File part = new File(new File(ctx.getFilesDir(), "logs"), name);
+                File part = new File(logDir(ctx), name);
                 if (part.exists()) Files.copy(part.toPath(), os);
             }
         }
         return out;
+    }
+
+    private static String environment(Context ctx) throws Exception {
+        return "Boice " + ctx.getPackageManager().getPackageInfo(ctx.getPackageName(), 0).versionName
+                + ", Android " + Build.VERSION.RELEASE
+                + ", " + Build.MANUFACTURER + " " + Build.MODEL;
+    }
+
+    private static void appendExits(Context ctx, StringBuilder b, int max) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return;
+        ActivityManager am = ctx.getSystemService(ActivityManager.class);
+        for (ApplicationExitInfo info : am.getHistoricalProcessExitReasons(null, 0, max)) {
+            b.append("\n  exit ").append(time(info.getTimestamp()))
+                    .append(' ').append(info.getProcessName())
+                    .append(" reason=").append(exitReason(info.getReason()))
+                    .append(" status=").append(info.getStatus())
+                    .append(" importance=").append(info.getImportance())
+                    .append(" rssMB=").append(info.getRss() / 1024);
+        }
     }
 
     private static String exitReason(int reason) {
