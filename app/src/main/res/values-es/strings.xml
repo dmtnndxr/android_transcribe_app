@@ -35,7 +35,7 @@
     <string name="setting_pause_audio_desc">Pausar el audio mientras se graba</string>
 
     <string name="setting_record_background">Grabar en segundo plano</string>
-    <string name="setting_record_background_desc">Seguir grabando cuando el teclado de voz está oculto; el texto se inserta al volver</string>
+    <string name="setting_record_background_desc">Seguir grabando con el teclado de voz oculto (requiere notificaciones). Si está desactivado, la grabación se detiene y lo dicho se conserva</string>
 
     <string name="setting_auto_stop">Parada automática tras silencio</string>
     <string name="setting_auto_stop_desc">Cerrar la ventana de entrada de voz automáticamente ~2 segundos después de dejar de hablar</string>
@@ -152,4 +152,17 @@
     <string name="subs_grant_overlay">Permite «Mostrar sobre otras apps»</string>
     <string name="subs_overlay_required">Los subtítulos en directo necesitan el permiso «Mostrar sobre otras apps»</string>
     <string name="subs_capture_denied">Se denegó la captura de pantalla</string>
+    <string name="notif_still_recording">Sigue grabando</string>
+    <string name="notif_recording_text">Se detiene sola tras una hora</string>
+    <string name="notif_needed_title">¿Permitir notificaciones?</string>
+    <string name="notif_needed_body">Muestran que hay una grabación en curso y permiten detenerla. Sin ellas, la grabación se detiene al ocultarse el teclado (lo dicho se conserva).</string>
+    <string name="notif_allow">Permitir</string>
+    <string name="notif_not_now">Ahora no</string>
+    <string name="history_recognized">Reconocido</string>
+    <string name="history_recognized_partly">Reconocido en parte</string>
+    <string name="history_not_recognized">No reconocido</string>
+    <string name="history_recognized_no_speech">No se detectó voz</string>
+    <string name="history_retranscribe">Transcribir de nuevo</string>
+    <string name="history_retranscribe_busy">Se está transcribiendo otra grabación</string>
+    <string name="history_retranscribe_failed">No se pudo transcribir de nuevo. La grabación está a salvo, puedes reintentarlo.</string>
 </resources>

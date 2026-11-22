@@ -43,7 +43,7 @@
     <string name="setting_pause_audio_desc">Pause audio while recording</string>
 
     <string name="setting_record_background">Record in background</string>
-    <string name="setting_record_background_desc">Keep recording when the voice keyboard is hidden; the text is inserted when you return</string>
+    <string name="setting_record_background_desc">Keep recording when the voice keyboard is hidden (needs notifications). When off, recording stops then, and what you said is kept</string>
 
     <string name="setting_auto_stop">Auto-stop after silence</string>
     <string name="setting_auto_stop_desc">End the voice input popup automatically ~2 seconds after you stop speaking</string>
@@ -377,4 +377,17 @@
     <string name="subs_grant_overlay">Please allow “Display over other apps”</string>
     <string name="subs_overlay_required">Live subtitles need the “Display over other apps” permission</string>
     <string name="subs_capture_denied">Screen capture was denied</string>
+    <string name="notif_still_recording">Still recording</string>
+    <string name="notif_recording_text">Stops by itself after an hour</string>
+    <string name="notif_needed_title">Allow notifications?</string>
+    <string name="notif_needed_body">They show that a recording is running and let you stop it. Without them, recording stops when the keyboard hides (what you said is kept).</string>
+    <string name="notif_allow">Allow</string>
+    <string name="notif_not_now">Not now</string>
+    <string name="history_recognized">Recognized</string>
+    <string name="history_recognized_partly">Partly recognized</string>
+    <string name="history_not_recognized">Not recognized</string>
+    <string name="history_recognized_no_speech">No speech found</string>
+    <string name="history_retranscribe">Transcribe again</string>
+    <string name="history_retranscribe_busy">Another recording is being transcribed</string>
+    <string name="history_retranscribe_failed">Transcribing again failed. The recording is safe, you can retry.</string>
 </resources>

@@ -374,6 +374,67 @@ pub fn get_engine() -> Option<Arc<Mutex<Engine>>> {
     GLOBAL_ENGINE.lock().unwrap().clone()
 }
 
+pub enum RecordingResult {
+    Done(String),
+    Canceled,
+    Failed(String),
+}
+
+/// Transcribes a recording of any length a run (up to a minute) at a time.
+/// `progress` gets the text so far and the samples done after each run.
+/// `cancelled` is checked between runs: a run can't be interrupted.
+///
+/// Quiet is only trimmed at the very start and end of the recording, as in
+/// [`transcribe_speech`]: inside it, a quiet speaker at the edge of a run would
+/// be taken for background. A run of pure digital silence is skipped.
+pub fn transcribe_recording(
+    engine: &Arc<Mutex<Engine>>,
+    recording: &mut crate::audio::Recording,
+    cancelled: &std::sync::atomic::AtomicBool,
+    mut progress: impl FnMut(&str, u64),
+) -> RecordingResult {
+    use std::sync::atomic::Ordering;
+    let mut text = String::new();
+    let mut failed = None;
+    let read = recording.for_each_run(MAX_RUN_SAMPLES, SPLIT_SEARCH_SAMPLES, |run, first, last, done| {
+        if cancelled.load(Ordering::SeqCst) {
+            return false;
+        }
+        let speech = crate::endpoint::speech_range(&run);
+        if !speech.is_empty() {
+            let start = if first { speech.start } else { 0 };
+            let end = if last { speech.end } else { run.len() };
+            let samples = if end - start < run.len() { run[start..end].to_vec() } else { run };
+            match transcribe_shared(engine, samples) {
+                Ok(piece) => {
+                    let piece = piece.trim();
+                    if !piece.is_empty() {
+                        if !text.is_empty() {
+                            text.push(' ');
+                        }
+                        text.push_str(piece);
+                    }
+                }
+                Err(e) => {
+                    failed = Some(e);
+                    return false;
+                }
+            }
+        }
+        progress(&text, done);
+        true
+    });
+    if let Err(e) = read {
+        RecordingResult::Failed(format!("can't read the recording: {e}"))
+    } else if let Some(e) = failed {
+        RecordingResult::Failed(e)
+    } else if cancelled.load(Ordering::SeqCst) {
+        RecordingResult::Canceled
+    } else {
+        RecordingResult::Done(text)
+    }
+}
+
 /// [`transcribe_shared`] for a recording or file: long quiet stretches
 /// before and after the speech are left out (see
 /// [`crate::endpoint::speech_range`]).

@@ -58,6 +58,15 @@ public class HistoryActivity extends AppCompatActivity {
     private RecyclerView list;
     private boolean seeking;
 
+    private static final long REFRESH_MS = 3000;
+    private final Runnable refreshWhileBusy = new Runnable() {
+        @Override
+        public void run() {
+            if (adapter.hasLiveEntry()) reload();
+            main.postDelayed(this, REFRESH_MS);
+        }
+    };
+
     /** Moves the loaded entry's seek bar along while it plays. */
     private final Runnable progressTick = new Runnable() {
         @Override
@@ -106,13 +115,34 @@ public class HistoryActivity extends AppCompatActivity {
     @Override
     protected void onResume() {
         super.onResume();
-        // The keyboard adds entries from its own process while we're away.
-        reload();
+        RetranscribeService.setListener(this::reload);
+        // The keyboard adds entries from its own process while we're away. If
+        // that process is gone, what it left unfinished won't finish by itself.
+        if (isKeyboardProcessRunning()) {
+            reload();
+        } else {
+            HistoryStore.recover(this, System.currentTimeMillis());
+            HistoryStore.afterWrites(() -> main.post(this::reload));
+        }
+        // Follows a dictation being transcribed in the keyboard process.
+        main.postDelayed(refreshWhileBusy, REFRESH_MS);
+    }
+
+    private boolean isKeyboardProcessRunning() {
+        List<android.app.ActivityManager.RunningAppProcessInfo> processes =
+                getSystemService(android.app.ActivityManager.class).getRunningAppProcesses();
+        if (processes == null) return true; // unknown: touch nothing
+        for (android.app.ActivityManager.RunningAppProcessInfo info : processes) {
+            if (info.processName.equals(getPackageName() + ":ime")) return true;
+        }
+        return false;
     }
 
     @Override
     protected void onPause() {
         super.onPause();
+        main.removeCallbacks(refreshWhileBusy);
+        RetranscribeService.setListener(null);
         stopPlayback();
     }
 
@@ -123,6 +153,7 @@ public class HistoryActivity extends AppCompatActivity {
     }
 
     private void reload() {
+        if (io.isShutdown()) return;
         String query = searchField.getText() == null ? "" : searchField.getText().toString();
         io.execute(() -> {
             List<HistoryStore.Entry> entries;
@@ -175,6 +206,22 @@ public class HistoryActivity extends AppCompatActivity {
             HistoryStore.delete(this, e);
             main.post(this::reload);
         });
+    }
+
+    private void retranscribe(HistoryStore.Entry e) {
+        if (e.id.equals(RetranscribeService.runningId())) {
+            RetranscribeService.cancel(this);
+        } else if (RetranscribeService.runningId() != null) {
+            Toast.makeText(this, R.string.history_retranscribe_busy, Toast.LENGTH_SHORT).show();
+        } else {
+            RetranscribeService.start(this, e.id);
+        }
+    }
+
+    /** Still in the hands of the keyboard. */
+    private static boolean isLive(HistoryStore.Entry e) {
+        return HistoryStore.OUTCOME_RECORDING.equals(e.outcome)
+                || HistoryStore.OUTCOME_PENDING.equals(e.outcome);
     }
 
     private void togglePlayback(HistoryStore.Entry e) {
@@ -334,6 +381,13 @@ public class HistoryActivity extends AppCompatActivity {
             return -1;
         }
 
+        boolean hasLiveEntry() {
+            for (HistoryStore.Entry e : entries) {
+                if (isLive(e)) return true;
+            }
+            return false;
+        }
+
         void setEntries(List<HistoryStore.Entry> entries) {
             this.entries = entries;
             notifyDataSetChanged();
@@ -402,6 +456,49 @@ public class HistoryActivity extends AppCompatActivity {
             time.setText(clock(positionMs) + " / " + clock(durationMs));
         }
 
+        /** The line saying how much of the recording became text, and the button to redo it. */
+        private void bindRecognition(HistoryStore.Entry e) {
+            TextView state = itemView.findViewById(R.id.history_recognition);
+            MaterialButton again = itemView.findViewById(R.id.history_retranscribe);
+            boolean running = e.id.equals(RetranscribeService.runningId());
+            boolean live = isLive(e);
+            boolean full = e.recognition == HistoryStore.RECOGNIZED_FULL;
+            boolean hasWords = e.rawText != null && !e.rawText.isEmpty();
+
+            String label;
+            int color = androidx.appcompat.R.attr.colorPrimary;
+            if (running) {
+                String progress = RetranscribeService.progress();
+                label = progress == null ? getString(R.string.notif_transcribing)
+                        : getString(R.string.file_transcribing_at, progress);
+            } else if (HistoryStore.OUTCOME_RECORDING.equals(e.outcome)) {
+                label = getString(R.string.notif_recording);
+                color = androidx.appcompat.R.attr.colorError;
+            } else if (live && !full) {
+                label = getString(R.string.notif_transcribing);
+            } else if (full) {
+                label = getString(hasWords
+                        ? R.string.history_recognized : R.string.history_recognized_no_speech);
+                color = com.google.android.material.R.attr.colorOnSurfaceVariant;
+            } else if (e.recognition == HistoryStore.RECOGNIZED_PARTLY) {
+                label = getString(R.string.history_recognized_partly);
+                color = com.google.android.material.R.attr.colorTertiary;
+            } else {
+                label = getString(R.string.history_not_recognized);
+                color = androidx.appcompat.R.attr.colorError;
+            }
+            state.setText(label);
+            state.setTextColor(com.google.android.material.color.MaterialColors.getColor(state, color));
+
+            File audio = HistoryStore.audioFile(itemView.getContext(), e);
+            boolean canRedo = !live && audio != null && audio.exists();
+            // Out in the open for what needs it; behind a tap for what doesn't.
+            boolean wanted = !full || e.id.equals(expandedId);
+            again.setVisibility(running || (canRedo && wanted) ? View.VISIBLE : View.GONE);
+            again.setText(running ? R.string.ime_cancel : R.string.history_retranscribe);
+            again.setOnClickListener(v -> retranscribe(e));
+        }
+
         void bind(HistoryStore.Entry e) {
             StringBuilder m = new StringBuilder(DateUtils.formatDateTime(itemView.getContext(),
                     e.created, DateUtils.FORMAT_SHOW_DATE | DateUtils.FORMAT_SHOW_TIME
@@ -416,6 +513,7 @@ public class HistoryActivity extends AppCompatActivity {
 
             boolean hasText = e.finalText != null && !e.finalText.isEmpty();
             // An entry can be just a recording: interrupted, failed or silent.
+            bindRecognition(e);
             text.setText(hasText ? e.finalText : getString(R.string.history_no_text));
             itemView.findViewById(R.id.history_copy).setVisibility(hasText ? View.VISIBLE : View.GONE);
             itemView.findViewById(R.id.history_share).setVisibility(hasText ? View.VISIBLE : View.GONE);

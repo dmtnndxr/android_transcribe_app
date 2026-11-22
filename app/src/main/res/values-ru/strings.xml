@@ -41,7 +41,7 @@
     <string name="setting_pause_audio_desc">Приостанавливать аудио во время записи</string>
 
     <string name="setting_record_background">Запись в фоне</string>
-    <string name="setting_record_background_desc">Продолжать запись, когда голосовая клавиатура скрыта; текст вставляется по возвращении</string>
+    <string name="setting_record_background_desc">Продолжать запись, когда голосовая клавиатура скрыта (нужны уведомления). Если выключено, запись останавливается, а сказанное сохраняется</string>
 
     <string name="setting_auto_stop">Автостоп при тишине</string>
     <string name="setting_auto_stop_desc">Автоматически закрывать окно голосового ввода примерно через 2 секунды после окончания речи</string>
@@ -346,4 +346,17 @@
     <string name="subs_grant_overlay">Разрешите «Поверх других приложений»</string>
     <string name="subs_overlay_required">Для живых субтитров нужно разрешение «Поверх других приложений»</string>
     <string name="subs_capture_denied">Запись экрана запрещена</string>
+    <string name="notif_still_recording">Запись всё ещё идёт</string>
+    <string name="notif_recording_text">Через час остановится сама</string>
+    <string name="notif_needed_title">Разрешить уведомления?</string>
+    <string name="notif_needed_body">Они показывают, что идёт запись, и позволяют её остановить. Без них запись останавливается, когда клавиатура скрывается (сказанное сохраняется).</string>
+    <string name="notif_allow">Разрешить</string>
+    <string name="notif_not_now">Не сейчас</string>
+    <string name="history_recognized">Распознано</string>
+    <string name="history_recognized_partly">Распознано не до конца</string>
+    <string name="history_not_recognized">Не распознано</string>
+    <string name="history_recognized_no_speech">Речь не найдена</string>
+    <string name="history_retranscribe">Распознать заново</string>
+    <string name="history_retranscribe_busy">Сейчас распознаётся другая запись</string>
+    <string name="history_retranscribe_failed">Распознать заново не удалось. Запись цела, можно повторить.</string>
 </resources>

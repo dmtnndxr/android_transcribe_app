@@ -28,6 +28,24 @@ final class DoneHaptics {
         return !new File(context.getFilesDir(), NO_VIBRATE_MARKER).exists();
     }
 
+    /**
+     * "Still recording", and "stopped at the limit". Not behind the setting:
+     * it is what tells the user a forgotten microphone is on. With notification
+     * attributes, or Android drops a vibration from the background.
+     */
+    static void remind(Context context) {
+        try {
+            Vibrator vibrator = context.getSystemService(Vibrator.class);
+            if (vibrator == null || !vibrator.hasVibrator()) return;
+            vibrator.vibrate(VibrationEffect.createWaveform(new long[]{0, 300, 200, 300}, -1),
+                    new android.media.AudioAttributes.Builder()
+                            .setUsage(android.media.AudioAttributes.USAGE_NOTIFICATION)
+                            .build());
+        } catch (RuntimeException e) {
+            Log.w(TAG, "Reminder vibration failed", e);
+        }
+    }
+
     static void play(Context context) {
         if (!isEnabled(context)) return;
         try {

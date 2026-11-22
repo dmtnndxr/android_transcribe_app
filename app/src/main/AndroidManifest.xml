@@ -8,6 +8,10 @@
     <!-- The voice keyboard is a microphone foreground service while it
          records; otherwise Android mutes it once the keyboard is hidden. -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+    <!-- "Transcribe again" in the history runs as a foreground service -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <!-- A long recording keeps being transcribed with the screen off -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- Short buzz when the voice keyboard finishes a dictation. -->
@@ -146,6 +150,12 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths" />
         </provider>
+
+        <!-- "Transcribe again" in the history -->
+        <service
+            android:name=".RetranscribeService"
+            android:foregroundServiceType="dataSync"
+            android:exported="false" />
 
         <!-- Live Subtitles Service -->
         <service

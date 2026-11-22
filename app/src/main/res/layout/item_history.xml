@@ -19,6 +19,15 @@
             android:textAppearance="?attr/textAppearanceLabelMedium"
             android:textColor="?attr/colorOnSurfaceVariant" />
 
+        <!-- Not recognized / partly / recognized -->
+        <TextView
+            android:id="@+id/history_recognition"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:textStyle="bold"
+            android:textAppearance="?attr/textAppearanceLabelLarge" />
+
         <TextView
             android:id="@+id/history_text"
             android:layout_width="match_parent"
@@ -37,6 +46,14 @@
             android:layout_marginTop="8dp"
             android:textAppearance="?attr/textAppearanceBodyMedium"
             android:textColor="?attr/colorOnSurfaceVariant"
+            android:visibility="gone" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/history_retranscribe"
+            style="@style/Widget.Material3.Button.TonalButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
             android:visibility="gone" />
 
         <!-- Playback position; shown while this entry's recording is loaded. -->

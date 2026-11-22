@@ -35,7 +35,7 @@
     <string name="setting_pause_audio_desc">Mettre l\'audio en pause pendant l\'enregistrement</string>
 
     <string name="setting_record_background">Enregistrer en arrière-plan</string>
-    <string name="setting_record_background_desc">Continuer l\'enregistrement quand le clavier vocal est masqué ; le texte est inséré à votre retour</string>
+    <string name="setting_record_background_desc">Continuer d’enregistrer quand le clavier vocal est masqué (notifications requises). Sinon, l’enregistrement s’arrête et ce qui a été dit est conservé</string>
 
     <string name="setting_auto_stop">Arrêt automatique après un silence</string>
     <string name="setting_auto_stop_desc">Fermer automatiquement la fenêtre de saisie vocale ~2 secondes après la fin de la parole</string>
@@ -152,4 +152,17 @@
     <string name="subs_grant_overlay">Veuillez autoriser « Afficher par-dessus les autres applis »</string>
     <string name="subs_overlay_required">Les sous-titres en direct nécessitent l\'autorisation « Afficher par-dessus les autres applis »</string>
     <string name="subs_capture_denied">La capture d\'écran a été refusée</string>
+    <string name="notif_still_recording">Enregistrement toujours en cours</string>
+    <string name="notif_recording_text">S’arrête tout seul après une heure</string>
+    <string name="notif_needed_title">Autoriser les notifications ?</string>
+    <string name="notif_needed_body">Elles signalent un enregistrement en cours et permettent de l’arrêter. Sans elles, il s’arrête quand le clavier est masqué (ce qui a été dit est conservé).</string>
+    <string name="notif_allow">Autoriser</string>
+    <string name="notif_not_now">Plus tard</string>
+    <string name="history_recognized">Reconnu</string>
+    <string name="history_recognized_partly">Reconnu en partie</string>
+    <string name="history_not_recognized">Non reconnu</string>
+    <string name="history_recognized_no_speech">Aucune parole détectée</string>
+    <string name="history_retranscribe">Transcrire à nouveau</string>
+    <string name="history_retranscribe_busy">Un autre enregistrement est en cours de transcription</string>
+    <string name="history_retranscribe_failed">Échec de la nouvelle transcription. L’enregistrement est intact, vous pouvez réessayer.</string>
 </resources>

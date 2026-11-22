@@ -68,6 +68,13 @@ public final class HistoryStore {
     private static final String TABLE = "entries";
     private static final String AUDIO_DIR = "history";
 
+    // How much of the recording made it into text. Kept apart from the outcome,
+    // which says where the text went.
+    public static final int RECOGNIZED_NONE = 0;
+    public static final int RECOGNIZED_PARTLY = 1;
+    public static final int RECOGNIZED_FULL = 2;
+    private static final String TEMP_DIR = "capture_tmp";
+
     private static final ExecutorService WRITER = Executors.newSingleThreadExecutor();
     private static Helper helper;
 
@@ -89,6 +96,7 @@ public final class HistoryStore {
         public String note;
         /** Recording file name in the history folder, or null. */
         public String audio;
+        public int recognition;
     }
 
     // --- Settings ------------------------------------------------------------
@@ -161,6 +169,17 @@ public final class HistoryStore {
         return new File(audioDir(ctx), UUID.randomUUID() + ".wav");
     }
 
+    /**
+     * Where to record when the history doesn't keep audio: recognition reads
+     * the file, which is deleted right after. Not the cache, which Android may
+     * clear in the middle of a recording.
+     */
+    static File newTempAudioFile(Context ctx) {
+        File dir = new File(ctx.getFilesDir(), TEMP_DIR);
+        if (!dir.exists()) dir.mkdirs();
+        return new File(dir, UUID.randomUUID() + ".wav");
+    }
+
     public static File audioFile(Context ctx, Entry e) {
         return e.audio == null ? null : new File(audioDir(ctx), e.audio);
     }
@@ -187,6 +206,7 @@ public final class HistoryStore {
         v.put("raw_text", rawText);
         v.put("final_text", rawText);
         v.put("outcome", OUTCOME_PENDING);
+        v.put("recognition", RECOGNIZED_FULL);
         if (audio != null && audio.exists()) v.put("audio", audio.getName());
         WRITER.execute(() -> {
             try {
@@ -214,6 +234,7 @@ public final class HistoryStore {
         v.put("raw_text", "");
         v.put("final_text", "");
         v.put("outcome", OUTCOME_RECORDING);
+        v.put("recognition", RECOGNIZED_NONE);
         v.put("audio", audio.getName());
         WRITER.execute(() -> {
             try {
@@ -239,8 +260,59 @@ public final class HistoryStore {
         v.put("raw_text", text);
         v.put("final_text", text);
         v.put("outcome", OUTCOME_PENDING);
+        v.put("recognition", RECOGNIZED_FULL);
         v.putNull("note");
         update(ctx, id, v);
+    }
+
+    /** The text so far of a recording that is still being transcribed. */
+    static void progress(Context ctx, String id, String text) {
+        // Nothing recognized in the first minutes is not "partly recognized".
+        if (text.isEmpty()) return;
+        ContentValues v = new ContentValues();
+        v.put("raw_text", text);
+        v.put("final_text", text);
+        v.put("recognition", RECOGNIZED_PARTLY);
+        update(ctx, id, v);
+    }
+
+    /** All of it was transcribed and there are no words in it. */
+    static void noSpeech(Context ctx, String id) {
+        ContentValues v = new ContentValues();
+        v.put("outcome", OUTCOME_NO_SPEECH);
+        v.put("recognition", RECOGNIZED_FULL);
+        update(ctx, id, v);
+    }
+
+    static void setNote(Context ctx, String id, String note) {
+        ContentValues v = new ContentValues();
+        v.put("note", note);
+        update(ctx, id, v);
+    }
+
+    /** The result of "Transcribe again"; {@code before} is the entry as it was. */
+    static void retranscribed(Context ctx, Entry before, String text) {
+        boolean wasFull = before.recognition == RECOGNIZED_FULL;
+        boolean hadText = before.rawText != null && !before.rawText.isEmpty();
+        // Never trade text for nothing.
+        if (text.isEmpty() && hadText) return;
+        ContentValues v = new ContentValues();
+        v.put("recognition", RECOGNIZED_FULL);
+        v.put("raw_text", text);
+        // What AI or a voice edit made of a complete text stays.
+        if (!wasFull || !hadText || before.rawText.equals(before.finalText)) {
+            v.put("final_text", text);
+        }
+        if (!wasFull || !hadText) {
+            v.put("outcome", text.isEmpty() ? OUTCOME_NO_SPEECH : OUTCOME_KEPT);
+            v.putNull("note");
+        }
+        update(ctx, before.id, v);
+    }
+
+    /** Runs {@code then} on the writer thread, after the writes queued so far. */
+    static void afterWrites(Runnable then) {
+        WRITER.execute(then);
     }
 
     private static void update(Context ctx, String id, ContentValues v) {
@@ -281,6 +353,7 @@ public final class HistoryStore {
             try {
                 recoverUnfinished(app, processStart);
                 adoptStrayRecordings(app, processStart);
+                deleteStaleTempFiles(app, processStart);
             } catch (RuntimeException e) {
                 DebugLog.error(app, "history recovery failed", e);
             }
@@ -348,9 +421,18 @@ public final class HistoryStore {
             v.put("raw_text", "");
             v.put("final_text", "");
             v.put("outcome", OUTCOME_INTERRUPTED);
+            v.put("recognition", RECOGNIZED_NONE);
             v.put("audio", file.getName());
             db.insert(TABLE, null, v);
             DebugLog.event(ctx, "history: adopted a stray recording, " + duration + " ms");
+        }
+    }
+
+    private static void deleteStaleTempFiles(Context ctx, long before) {
+        File[] files = new File(ctx.getFilesDir(), TEMP_DIR).listFiles();
+        if (files == null) return;
+        for (File file : files) {
+            if (file.lastModified() < before) file.delete();
         }
     }
 
@@ -393,23 +475,42 @@ public final class HistoryStore {
             args = new String[]{like, like, like};
         }
         try (Cursor c = db(ctx).query(TABLE, null, where, args, null, null,
-                "created DESC", "500")) {
+                "created DESC")) {
             while (c.moveToNext()) {
-                Entry e = new Entry();
-                e.id = c.getString(c.getColumnIndexOrThrow("id"));
-                e.created = c.getLong(c.getColumnIndexOrThrow("created"));
-                e.durationMs = c.getLong(c.getColumnIndexOrThrow("duration_ms"));
-                e.source = c.getString(c.getColumnIndexOrThrow("source"));
-                e.rawText = c.getString(c.getColumnIndexOrThrow("raw_text"));
-                e.finalText = c.getString(c.getColumnIndexOrThrow("final_text"));
-                e.originalText = c.getString(c.getColumnIndexOrThrow("original_text"));
-                e.outcome = c.getString(c.getColumnIndexOrThrow("outcome"));
-                e.note = c.getString(c.getColumnIndexOrThrow("note"));
-                e.audio = c.getString(c.getColumnIndexOrThrow("audio"));
-                out.add(e);
+                out.add(read(c));
             }
         }
         return out;
+    }
+
+    static Entry get(Context ctx, String id) {
+        try (Cursor c = db(ctx).query(TABLE, null, "id = ?", new String[]{id}, null, null, null)) {
+            return c.moveToFirst() ? read(c) : null;
+        }
+    }
+
+    private static Entry read(Cursor c) {
+        Entry e = new Entry();
+        e.id = c.getString(c.getColumnIndexOrThrow("id"));
+        e.created = c.getLong(c.getColumnIndexOrThrow("created"));
+        e.durationMs = c.getLong(c.getColumnIndexOrThrow("duration_ms"));
+        e.source = c.getString(c.getColumnIndexOrThrow("source"));
+        e.rawText = c.getString(c.getColumnIndexOrThrow("raw_text"));
+        e.finalText = c.getString(c.getColumnIndexOrThrow("final_text"));
+        e.originalText = c.getString(c.getColumnIndexOrThrow("original_text"));
+        e.outcome = c.getString(c.getColumnIndexOrThrow("outcome"));
+        e.note = c.getString(c.getColumnIndexOrThrow("note"));
+        e.audio = c.getString(c.getColumnIndexOrThrow("audio"));
+        int recognition = c.getColumnIndexOrThrow("recognition");
+        if (!c.isNull(recognition)) {
+            e.recognition = c.getInt(recognition);
+        } else {
+            // Written by a version without the column.
+            boolean recognized = (e.rawText != null && !e.rawText.isEmpty())
+                    || OUTCOME_NO_SPEECH.equals(e.outcome);
+            e.recognition = recognized ? RECOGNIZED_FULL : RECOGNIZED_NONE;
+        }
+        return e;
     }
 
     public static void delete(Context ctx, Entry e) {
@@ -478,8 +579,31 @@ public final class HistoryStore {
                     + "original_text TEXT, "
                     + "outcome TEXT NOT NULL, "
                     + "note TEXT, "
-                    + "audio TEXT)");
+                    + "audio TEXT, "
+                    + "recognition INTEGER)");
             db.execSQL("CREATE INDEX entries_created ON " + TABLE + " (created)");
+        }
+
+        /**
+         * A column added without raising the schema version: older app versions
+         * refuse to open a newer schema, and this one they simply ignore.
+         */
+        @Override
+        public void onOpen(SQLiteDatabase db) {
+            if (db.isReadOnly()) return;
+            db.beginTransaction(); // both processes may get here at once
+            try {
+                boolean present = false;
+                try (Cursor c = db.rawQuery("PRAGMA table_info(" + TABLE + ")", null)) {
+                    while (c.moveToNext()) {
+                        if ("recognition".equals(c.getString(1))) present = true;
+                    }
+                }
+                if (!present) db.execSQL("ALTER TABLE " + TABLE + " ADD COLUMN recognition INTEGER");
+                db.setTransactionSuccessful();
+            } finally {
+                db.endTransaction();
+            }
         }
 
         @Override

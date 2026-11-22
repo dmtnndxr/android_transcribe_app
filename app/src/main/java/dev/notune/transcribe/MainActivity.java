@@ -121,6 +121,12 @@ public class MainActivity extends AppCompatActivity {
         bindMarkerSwitch(R.id.switch_pause_audio, "pause_audio", false);
         // Record-in-background defaults to ON; its marker file is the opt-out.
         bindMarkerSwitch(R.id.switch_record_background, "stop_on_hide", true);
+        // A click, unlike the change listener, is only ever the user's.
+        findViewById(R.id.switch_record_background).setOnClickListener(v -> {
+            if (((CompoundButton) v).isChecked() && !RecordingNotification.canShow(this)) {
+                explainNotifications();
+            }
+        });
         bindMarkerSwitch(R.id.switch_auto_stop, "auto_stop", false);
 
         // Live subtitle line limit: 2 (default), 4, or 0 = unlimited.
@@ -179,7 +185,7 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onResume() {
         super.onResume();
-        askForNotificationsOnce();
+        explainNotificationsOnce();
         // Re-check on return from the keyboard chooser, settings, or a test run.
         updateVoiceInputStatus();
         updatePunctuationKeysButton();
@@ -394,25 +400,51 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    /**
-     * The recording notification, with its Stop button, only shows with this
-     * permission. Asked once, after the microphone; recording works either way.
-     */
-    private void askForNotificationsOnce() {
-        if (android.os.Build.VERSION.SDK_INT < 33) return;
+    /** Without notifications a recording stops when the keyboard hides; say so, once. */
+    private void explainNotificationsOnce() {
         if (checkSelfPermission(android.Manifest.permission.RECORD_AUDIO)
                 != PackageManager.PERMISSION_GRANTED) return;
-        if (checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)
-                == PackageManager.PERMISSION_GRANTED) return;
-        File asked = new File(getFilesDir(), "notifications_asked");
-        if (asked.exists()) return;
+        if (RecordingNotification.canShow(this)) return;
+        if (new File(getFilesDir(), "stop_on_hide").exists()) return;
+        File shown = new File(getFilesDir(), "background_notice_shown");
+        if (shown.exists()) return;
         try {
-            asked.createNewFile();
+            shown.createNewFile();
         } catch (IOException e) {
-            Log.w(TAG, "Failed to remember the notification request", e);
+            Log.w(TAG, "Failed to remember the notification notice", e);
         }
-        requestPermissions(new String[]{android.Manifest.permission.POST_NOTIFICATIONS},
-                NOTIFICATIONS_REQ_CODE);
+        explainNotifications();
+    }
+
+    private void explainNotifications() {
+        new com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
+                .setTitle(R.string.notif_needed_title)
+                .setMessage(R.string.notif_needed_body)
+                .setNegativeButton(R.string.notif_not_now, null)
+                .setPositiveButton(R.string.notif_allow, (d, w) -> allowNotifications())
+                .show();
+    }
+
+    private void allowNotifications() {
+        if (android.os.Build.VERSION.SDK_INT >= 33
+                && checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)
+                        != PackageManager.PERMISSION_GRANTED) {
+            File asked = new File(getFilesDir(), "notifications_asked");
+            // Android shows the dialog twice at most; after that only settings help.
+            if (!asked.exists()
+                    || shouldShowRequestPermissionRationale(android.Manifest.permission.POST_NOTIFICATIONS)) {
+                try {
+                    asked.createNewFile();
+                } catch (IOException e) {
+                    Log.w(TAG, "Failed to remember the notification request", e);
+                }
+                requestPermissions(new String[]{android.Manifest.permission.POST_NOTIFICATIONS},
+                        NOTIFICATIONS_REQ_CODE);
+                return;
+            }
+        }
+        startActivity(new Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                .putExtra(Settings.EXTRA_APP_PACKAGE, getPackageName()));
     }
 
     private void shareDebugLog() {

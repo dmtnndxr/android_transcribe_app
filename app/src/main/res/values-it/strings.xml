@@ -35,7 +35,7 @@
     <string name="setting_pause_audio_desc">Metti in pausa l\'audio durante la registrazione</string>
 
     <string name="setting_record_background">Registra in background</string>
-    <string name="setting_record_background_desc">Continua a registrare quando la tastiera vocale è nascosta; il testo viene inserito al ritorno</string>
+    <string name="setting_record_background_desc">Continua a registrare con la tastiera vocale nascosta (servono le notifiche). Se disattivato, la registrazione si ferma e quanto detto resta salvato</string>
 
     <string name="setting_auto_stop">Arresto automatico dopo il silenzio</string>
     <string name="setting_auto_stop_desc">Chiudi la finestra di immissione vocale automaticamente ~2 secondi dopo la fine del parlato</string>
@@ -152,4 +152,17 @@
     <string name="subs_grant_overlay">Consenti «Mostra sopra altre app»</string>
     <string name="subs_overlay_required">I sottotitoli in tempo reale richiedono il permesso «Mostra sopra altre app»</string>
     <string name="subs_capture_denied">La cattura dello schermo è stata negata</string>
+    <string name="notif_still_recording">Registrazione ancora in corso</string>
+    <string name="notif_recording_text">Si ferma da sola dopo un’ora</string>
+    <string name="notif_needed_title">Consentire le notifiche?</string>
+    <string name="notif_needed_body">Mostrano che una registrazione è in corso e permettono di fermarla. Senza, si ferma quando la tastiera si nasconde (quanto detto resta salvato).</string>
+    <string name="notif_allow">Consenti</string>
+    <string name="notif_not_now">Non ora</string>
+    <string name="history_recognized">Riconosciuto</string>
+    <string name="history_recognized_partly">Riconosciuto in parte</string>
+    <string name="history_not_recognized">Non riconosciuto</string>
+    <string name="history_recognized_no_speech">Nessun parlato rilevato</string>
+    <string name="history_retranscribe">Trascrivi di nuovo</string>
+    <string name="history_retranscribe_busy">Un’altra registrazione è in fase di trascrizione</string>
+    <string name="history_retranscribe_failed">Nuova trascrizione non riuscita. La registrazione è al sicuro, puoi riprovare.</string>
 </resources>

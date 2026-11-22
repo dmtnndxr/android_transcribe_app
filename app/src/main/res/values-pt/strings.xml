@@ -35,7 +35,7 @@
     <string name="setting_pause_audio_desc">Pausar o áudio durante a gravação</string>
 
     <string name="setting_record_background">Gravar em segundo plano</string>
-    <string name="setting_record_background_desc">Continuar gravando quando o teclado de voz está oculto; o texto é inserido ao voltar</string>
+    <string name="setting_record_background_desc">Continuar a gravar com o teclado de voz oculto (requer notificações). Se desativado, a gravação para e o que foi dito fica guardado</string>
 
     <string name="setting_auto_stop">Parada automática após silêncio</string>
     <string name="setting_auto_stop_desc">Fechar a janela de entrada de voz automaticamente ~2 segundos após você parar de falar</string>
@@ -152,4 +152,17 @@
     <string name="subs_grant_overlay">Permita “Sobrepor a outros apps”</string>
     <string name="subs_overlay_required">As legendas ao vivo precisam da permissão “Sobrepor a outros apps”</string>
     <string name="subs_capture_denied">A captura de tela foi negada</string>
+    <string name="notif_still_recording">Ainda a gravar</string>
+    <string name="notif_recording_text">Para sozinha ao fim de uma hora</string>
+    <string name="notif_needed_title">Permitir notificações?</string>
+    <string name="notif_needed_body">Mostram que há uma gravação em curso e permitem pará-la. Sem elas, a gravação para quando o teclado é ocultado (o que foi dito fica guardado).</string>
+    <string name="notif_allow">Permitir</string>
+    <string name="notif_not_now">Agora não</string>
+    <string name="history_recognized">Reconhecido</string>
+    <string name="history_recognized_partly">Reconhecido em parte</string>
+    <string name="history_not_recognized">Não reconhecido</string>
+    <string name="history_recognized_no_speech">Nenhuma fala detectada</string>
+    <string name="history_retranscribe">Transcrever novamente</string>
+    <string name="history_retranscribe_busy">Outra gravação está a ser transcrita</string>
+    <string name="history_retranscribe_failed">Falha ao transcrever novamente. A gravação está segura, pode tentar de novo.</string>
 </resources>

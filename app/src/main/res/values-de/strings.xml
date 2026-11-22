@@ -35,7 +35,7 @@
     <string name="setting_pause_audio_desc">Audio während der Aufnahme pausieren</string>
 
     <string name="setting_record_background">Im Hintergrund aufnehmen</string>
-    <string name="setting_record_background_desc">Aufnahme fortsetzen, wenn die Sprach-Tastatur ausgeblendet ist; der Text wird bei Rückkehr eingefügt</string>
+    <string name="setting_record_background_desc">Weiter aufnehmen, wenn die Sprach-Tastatur ausgeblendet ist (benötigt Benachrichtigungen). Ist dies aus, stoppt die Aufnahme dann, das Gesagte bleibt erhalten</string>
 
     <string name="setting_auto_stop">Auto-Stopp bei Stille</string>
     <string name="setting_auto_stop_desc">Spracheingabe-Popup automatisch ~2 Sekunden nach dem Sprechende beenden</string>
@@ -152,4 +152,17 @@
     <string name="subs_grant_overlay">Bitte erlaube „Über anderen Apps einblenden“</string>
     <string name="subs_overlay_required">Live-Untertitel benötigen die Berechtigung „Über anderen Apps einblenden“</string>
     <string name="subs_capture_denied">Bildschirmaufnahme wurde abgelehnt</string>
+    <string name="notif_still_recording">Aufnahme läuft noch</string>
+    <string name="notif_recording_text">Stoppt nach einer Stunde von selbst</string>
+    <string name="notif_needed_title">Benachrichtigungen erlauben?</string>
+    <string name="notif_needed_body">Sie zeigen eine laufende Aufnahme an und lassen Sie sie stoppen. Ohne sie endet die Aufnahme, wenn die Tastatur ausgeblendet wird (das Gesagte bleibt erhalten).</string>
+    <string name="notif_allow">Erlauben</string>
+    <string name="notif_not_now">Nicht jetzt</string>
+    <string name="history_recognized">Erkannt</string>
+    <string name="history_recognized_partly">Teilweise erkannt</string>
+    <string name="history_not_recognized">Nicht erkannt</string>
+    <string name="history_recognized_no_speech">Keine Sprache erkannt</string>
+    <string name="history_retranscribe">Erneut transkribieren</string>
+    <string name="history_retranscribe_busy">Eine andere Aufnahme wird gerade transkribiert</string>
+    <string name="history_retranscribe_failed">Erneutes Transkribieren fehlgeschlagen. Die Aufnahme ist sicher, Sie können es wiederholen.</string>
 </resources>

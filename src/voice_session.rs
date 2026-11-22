@@ -29,7 +29,6 @@ struct StreamWorker {
 
 pub struct VoiceSessionState {
     pub stream: Option<SendStream>,
-    pub audio_buffer: Arc<Mutex<Vec<f32>>>,
     pub jvm: Arc<jni::JavaVM>,
     pub target_ref: GlobalRef,
     pub last_level_sent: Arc<Mutex<std::time::Instant>>,
@@ -44,7 +43,11 @@ pub struct VoiceSessionState {
     /// Feeds the recorder thread (see [`crate::audio::record`]). Taking the
     /// sender out finishes the file.
     record_tx: Arc<Mutex<Option<Sender<Vec<f32>>>>>,
-    recorder: Option<std::thread::JoinHandle<()>>,
+    /// Returns the audio that isn't in the file.
+    recorder: Option<std::thread::JoinHandle<Vec<f32>>>,
+    wav_path: Option<String>,
+    /// Stops the transcription of the recording that was stopped last.
+    transcription_cancel: Arc<AtomicBool>,
 }
 
 impl Drop for VoiceSessionState {
@@ -54,6 +57,31 @@ impl Drop for VoiceSessionState {
         self.session_active.store(false, Ordering::SeqCst);
         self.record_tx.lock().unwrap().take();
         abandon_stream(self);
+    }
+}
+
+/// The text so far, after each run of a recording's transcription.
+pub(crate) fn notify_progress(env: &mut JNIEnv, obj: &JObject, text: &str, done: u64, total: u64) {
+    if let Ok(jtxt) = env.new_string(text) {
+        let millis = |samples: u64| jni::objects::JValue::Long((samples / 16) as i64);
+        if env
+            .call_method(
+                obj,
+                "onTranscriptProgress",
+                "(Ljava/lang/String;JJ)V",
+                &[(&jtxt).into(), millis(done), millis(total)],
+            )
+            .is_err()
+        {
+            // The voice panel has no such callback.
+            let _ = env.exception_clear();
+        }
+    }
+}
+
+fn notify_canceled(env: &mut JNIEnv, obj: &JObject) {
+    if env.call_method(obj, "onTranscriptionCanceled", "()V", &[]).is_err() {
+        let _ = env.exception_clear();
     }
 }
 
@@ -120,7 +148,6 @@ pub fn init_session(env: JNIEnv, target: JObject) -> VoiceSessionState {
 
     let state = VoiceSessionState {
         stream: None,
-        audio_buffer: Arc::new(Mutex::new(Vec::new())),
         jvm: vm_arc.clone(),
         target_ref: target_ref.clone(),
         last_level_sent: Arc::new(Mutex::new(std::time::Instant::now())),
@@ -129,6 +156,8 @@ pub fn init_session(env: JNIEnv, target: JObject) -> VoiceSessionState {
         stream_worker: None,
         record_tx: Arc::new(Mutex::new(None)),
         recorder: None,
+        wav_path: None,
+        transcription_cancel: Arc::new(AtomicBool::new(false)),
     };
 
     // Load engine in background
@@ -172,9 +201,6 @@ pub fn start_recording(
         buffer_size: cpal::BufferSize::Default,
     };
 
-    state.audio_buffer.lock().unwrap().clear();
-    let buffer_clone = state.audio_buffer.clone();
-
     // End any previous session's monitor, then arm a fresh flag.
     state.session_active.store(false, Ordering::SeqCst);
     let session_active = Arc::new(AtomicBool::new(true));
@@ -194,6 +220,7 @@ pub fn start_recording(
     let last_sent = state.last_level_sent.clone();
     let endpoint_cb = endpoint.clone();
     let stream_tx = state.stream_tx.clone();
+    state.wav_path = wav_path.clone();
     start_recorder(&mut env, state, wav_path);
     let record_tx = state.record_tx.clone();
     let err_jvm = state.jvm.clone();
@@ -202,7 +229,6 @@ pub fn start_recording(
     let stream = device.build_input_stream(
         &config,
         move |data: &[f32], _: &_| {
-            buffer_clone.lock().unwrap().extend_from_slice(data);
             if let Some(tx) = record_tx.lock().unwrap().as_ref() {
                 let _ = tx.send(data.to_vec());
             }
@@ -371,7 +397,7 @@ fn start_recorder(env: &mut JNIEnv, state: &mut VoiceSessionState, path: Option<
             if let Ok(mut env) = jvm.attach_current_thread() {
                 notify_event(&mut env, target.as_obj(), event);
             }
-        });
+        })
     }));
 }
 
@@ -383,8 +409,8 @@ fn abandon_stream(state: &mut VoiceSessionState) {
     state.stream_tx.lock().unwrap().take();
 }
 
-/// Stops capture and transcribes. The saved recording, if any, is complete
-/// before transcription starts.
+/// Stops capture and transcribes from the saved file, a run at a time. Never
+/// blocks: this is called on the UI thread.
 pub fn stop_recording(mut env: JNIEnv, state: &mut VoiceSessionState) {
     // Drop the stream to stop recording; end the auto-stop monitor if running.
     state.session_active.store(false, Ordering::SeqCst);
@@ -392,19 +418,9 @@ pub fn stop_recording(mut env: JNIEnv, state: &mut VoiceSessionState) {
 
     state.record_tx.lock().unwrap().take();
     let recorder = state.recorder.take();
-    // Moved, not copied: this runs on the UI thread, and an hour is 230 MB.
-    let buffer = std::mem::take(&mut *state.audio_buffer.lock().unwrap());
-
-    // Guard against empty buffer (mic permission denied, instant stop, etc.)
-    if buffer.is_empty() {
-        abandon_stream(state);
-        notify_status(
-            &mut env,
-            state.target_ref.as_obj(),
-            "Error: no audio recorded. Check microphone permissions.",
-        );
-        return;
-    }
+    let wav_path = state.wav_path.take();
+    let cancelled = Arc::new(AtomicBool::new(false));
+    state.transcription_cancel = cancelled.clone();
 
     // Closing the channel tells the streaming worker the recording ended.
     state.stream_tx.lock().unwrap().take();
@@ -422,18 +438,35 @@ pub fn stop_recording(mut env: JNIEnv, state: &mut VoiceSessionState) {
         };
         let obj = target_ref.as_obj();
 
-        if let Some(recorder) = recorder {
-            let _ = recorder.join();
+        let unsaved = recorder.and_then(|r| r.join().ok()).unwrap_or_default();
+        let mut recording = match crate::audio::Recording::open(wav_path.as_deref(), unsaved) {
+            Ok(recording) => recording,
+            Err(e) => {
+                notify_status(&mut env, obj, &format!("Error: can't read the recording: {e}"));
+                return;
+            }
+        };
+        let total = recording.total_samples();
+        // Mic permission denied, instant stop, etc.
+        if total == 0 {
+            notify_status(&mut env, obj, "Error: no audio recorded. Check microphone permissions.");
+            return;
         }
 
         if let Some(worker) = worker {
-            match worker.result.recv() {
+            let result = worker.result.recv();
+            if cancelled.load(Ordering::SeqCst) {
+                notify_status(&mut env, obj, "Ready");
+                notify_canceled(&mut env, obj);
+                return;
+            }
+            match result {
                 Ok(Ok(Some(text))) => {
                     notify_status(&mut env, obj, "Ready");
                     notify_text(&mut env, obj, &text);
                     return;
                 }
-                // Fall back to transcribing the recorded buffer offline.
+                // Fall back to transcribing the recording offline.
                 Ok(Err(e)) => log::warn!("streaming failed ({}); transcribing offline", e),
                 _ => log::warn!("streaming ended without a result; transcribing offline"),
             }
@@ -442,25 +475,39 @@ pub fn stop_recording(mut env: JNIEnv, state: &mut VoiceSessionState) {
         // Wait for the engine if it is still loading, or reload it if the
         // model settings changed since it was loaded.
         if !engine::is_current() {
-            if let Err(_) = engine::ensure_loaded(&mut env, obj) {
+            if let Err(e) = engine::ensure_loaded(&mut env, obj) {
+                notify_status(&mut env, obj, &format!("Error: {}", e));
                 return;
             }
         }
-
-        if let Some(eng_arc) = engine::get_engine() {
-            let res = engine::transcribe_speech(&eng_arc, buffer);
-
-            match res {
-                Ok(text) => {
-                    notify_status(&mut env, obj, "Ready");
-                    notify_text(&mut env, obj, &text);
-                }
-                Err(e) => notify_status(&mut env, obj, &format!("Error: {}", e)),
-            }
-        } else {
+        let Some(eng) = engine::get_engine() else {
             notify_status(&mut env, obj, "Error: model not loaded");
+            return;
+        };
+
+        let result = engine::transcribe_recording(&eng, &mut recording, &cancelled, |text, done| {
+            notify_progress(&mut env, obj, text, done, total);
+        });
+        match result {
+            engine::RecordingResult::Done(text) => {
+                notify_status(&mut env, obj, "Ready");
+                notify_text(&mut env, obj, &text);
+            }
+            engine::RecordingResult::Canceled => {
+                notify_status(&mut env, obj, "Ready");
+                notify_canceled(&mut env, obj);
+            }
+            engine::RecordingResult::Failed(e) => {
+                notify_status(&mut env, obj, &format!("Error: {}", e))
+            }
         }
     });
+}
+
+/// Asks the transcription of the last stopped recording to stop after the
+/// run in progress.
+pub fn cancel_transcription(state: &VoiceSessionState) {
+    state.transcription_cancel.store(true, Ordering::SeqCst);
 }
 
 pub fn cancel_recording(mut env: JNIEnv, state: &mut VoiceSessionState) {
@@ -469,6 +516,6 @@ pub fn cancel_recording(mut env: JNIEnv, state: &mut VoiceSessionState) {
     abandon_stream(state);
     state.record_tx.lock().unwrap().take();
     state.recorder = None;
-    *state.audio_buffer.lock().unwrap() = Vec::new();
+    state.wav_path = None;
     notify_status(&mut env, state.target_ref.as_obj(), "Canceled");
 }

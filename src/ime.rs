@@ -77,3 +77,13 @@ pub unsafe extern "system" fn Java_dev_notune_transcribe_RustInputMethodService_
         voice_session::cancel_recording(env, state);
     }
 }
+
+#[no_mangle]
+pub unsafe extern "system" fn Java_dev_notune_transcribe_RustInputMethodService_cancelTranscription(
+    _env: JNIEnv,
+    _class: JClass,
+) {
+    if let Some(state) = IME_STATE.lock().unwrap().as_ref() {
+        voice_session::cancel_transcription(state);
+    }
+}
