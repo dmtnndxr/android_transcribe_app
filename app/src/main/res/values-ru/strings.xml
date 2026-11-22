@@ -302,4 +302,13 @@
     <string name="onb_ai_try_hint">Попробуйте здесь: нажмите «Диктовка с ИИ» на клавиатуре</string>
     <string name="onb_ai_sample">ну короче давай встретимся во вторник нет стоп в среду после обеда</string>
     <string name="onb_ai_test_ok">Работает.\nОтправлено: %1$s\nПолучено: %2$s</string>
+    <string name="notif_recording_channel">Запись</string>
+    <string name="notif_recording">Идёт запись</string>
+    <string name="notif_transcribing">Распознаю…</string>
+    <string name="history_outcome_recording">идёт запись</string>
+    <string name="history_outcome_interrupted">прервано</string>
+    <string name="history_outcome_no_speech">речь не найдена</string>
+    <string name="history_no_text">Текста нет, только запись</string>
+    <string name="btn_share_log">Поделиться журналом отладки</string>
+    <string name="desc_share_log">Если диктовка работает неправильно, поделитесь журналом. В нём время событий, ошибки и модель телефона, но нет текста диктовок, звука и ключей.</string>
 </resources>

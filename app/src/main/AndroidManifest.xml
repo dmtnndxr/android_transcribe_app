@@ -5,6 +5,9 @@
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
+    <!-- The voice keyboard is a microphone foreground service while it
+         records; otherwise Android mutes it once the keyboard is hidden. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- Short buzz when the voice keyboard finishes a dictation. -->
@@ -126,6 +129,17 @@
             </intent-filter>
         </activity>
 
+        <!-- Shares the exported debug log, and nothing else -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.files"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
         <!-- Live Subtitles Service -->
         <service
             android:name=".LiveSubtitleService"
@@ -155,6 +169,7 @@
             android:label="@string/ime_service_label"
             android:permission="android.permission.BIND_INPUT_METHOD"
             android:process=":ime"
+            android:foregroundServiceType="microphone"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.view.InputMethod" />

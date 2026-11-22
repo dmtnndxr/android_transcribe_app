@@ -333,4 +333,13 @@
     <string name="onb_ai_try_hint">Try it here: tap “Dictate + AI” on the keyboard</string>
     <string name="onb_ai_sample">so um i think we should meet on tuesday no wait wednesday afternoon</string>
     <string name="onb_ai_test_ok">Works.\nSent: %1$s\nGot back: %2$s</string>
+    <string name="notif_recording_channel">Recording</string>
+    <string name="notif_recording">Recording</string>
+    <string name="notif_transcribing">Transcribing…</string>
+    <string name="history_outcome_recording">recording</string>
+    <string name="history_outcome_interrupted">interrupted</string>
+    <string name="history_outcome_no_speech">no speech found</string>
+    <string name="history_no_text">No text, only the recording</string>
+    <string name="btn_share_log">Share debug log</string>
+    <string name="desc_share_log">If dictation misbehaves, share the debug log. It has times, errors and your phone model, but no dictated text, audio or keys.</string>
 </resources>

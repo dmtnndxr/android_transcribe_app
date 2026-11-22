@@ -316,6 +316,9 @@ public class HistoryActivity extends AppCompatActivity {
             case HistoryStore.OUTCOME_UNCHANGED: return getString(R.string.history_outcome_unchanged);
             case HistoryStore.OUTCOME_FAILED: return getString(R.string.history_outcome_failed);
             case HistoryStore.OUTCOME_CANCELED: return getString(R.string.history_outcome_canceled);
+            case HistoryStore.OUTCOME_RECORDING: return getString(R.string.history_outcome_recording);
+            case HistoryStore.OUTCOME_INTERRUPTED: return getString(R.string.history_outcome_interrupted);
+            case HistoryStore.OUTCOME_NO_SPEECH: return getString(R.string.history_outcome_no_speech);
             case HistoryStore.OUTCOME_PENDING: return getString(R.string.history_outcome_pending);
             default: return null;
         }
@@ -411,12 +414,16 @@ public class HistoryActivity extends AppCompatActivity {
             if (outcome != null) m.append(" · ").append(outcome);
             meta.setText(m);
 
-            text.setText(e.finalText);
+            boolean hasText = e.finalText != null && !e.finalText.isEmpty();
+            // An entry can be just a recording: interrupted, failed or silent.
+            text.setText(hasText ? e.finalText : getString(R.string.history_no_text));
+            itemView.findViewById(R.id.history_copy).setVisibility(hasText ? View.VISIBLE : View.GONE);
+            itemView.findViewById(R.id.history_share).setVisibility(hasText ? View.VISIBLE : View.GONE);
             boolean expanded = e.id.equals(expandedId);
             text.setMaxLines(expanded ? Integer.MAX_VALUE : 3);
             // Expanded text can be selected to copy just part of it. Collapsed
             // it stays plain so a tap anywhere on the card expands it.
-            text.setTextIsSelectable(expanded);
+            text.setTextIsSelectable(expanded && hasText);
             details.setTextIsSelectable(expanded);
 
             StringBuilder d = new StringBuilder();

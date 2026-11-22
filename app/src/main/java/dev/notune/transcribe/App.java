@@ -13,6 +13,12 @@ public class App extends Application {
     @Override
     public void onCreate() {
         super.onCreate();
+        Thread.UncaughtExceptionHandler next = Thread.getDefaultUncaughtExceptionHandler();
+        Thread.setDefaultUncaughtExceptionHandler((thread, error) -> {
+            DebugLog.crash(this, error);
+            if (next != null) next.uncaughtException(thread, error);
+        });
+        DebugLog.event(this, "process start");
         ThemePrefs.apply(this);
         DynamicColors.applyToActivitiesIfAvailable(this);
     }

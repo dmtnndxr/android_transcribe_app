@@ -46,6 +46,7 @@ tier1() {
       -d "$OUT/classes" \
       app/src/main/java/dev/notune/transcribe/PostProcessClient.java \
       app/src/main/java/dev/notune/transcribe/TextTidy.java \
+      app/src/main/java/dev/notune/transcribe/WavFiles.java \
       tools/verify/tests/*.java 2>&1; then
     fail "test compilation"
     return

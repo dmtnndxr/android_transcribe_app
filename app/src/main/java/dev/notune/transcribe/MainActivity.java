@@ -33,6 +33,7 @@ import java.util.Set;
 public class MainActivity extends AppCompatActivity {
     private static final String TAG = "MainActivity";
     private static final int PERM_REQ_CODE = 101;
+    private static final int NOTIFICATIONS_REQ_CODE = 102;
     private static final int REQ_VOICE_TEST = 202;
 
     static {
@@ -103,6 +104,7 @@ public class MainActivity extends AppCompatActivity {
         benchButton = findViewById(R.id.btn_benchmark);
         benchResultText = findViewById(R.id.text_bench_result);
         benchButton.setOnClickListener(v -> runBenchmark());
+        findViewById(R.id.btn_share_log).setOnClickListener(v -> shareDebugLog());
 
         // Settings stored as marker files in filesDir (readable from the :ime
         // process and native code without a content provider).
@@ -171,6 +173,7 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onResume() {
         super.onResume();
+        askForNotificationsOnce();
         // Re-check on return from the keyboard chooser, settings, or a test run.
         updateVoiceInputStatus();
         updatePunctuationKeysButton();
@@ -383,6 +386,48 @@ public class MainActivity extends AppCompatActivity {
         if (requestCode == PERM_REQ_CODE) {
             updateVoiceInputStatus();
         }
+    }
+
+    /**
+     * The recording notification, with its Stop button, only shows with this
+     * permission. Asked once, after the microphone; recording works either way.
+     */
+    private void askForNotificationsOnce() {
+        if (android.os.Build.VERSION.SDK_INT < 33) return;
+        if (checkSelfPermission(android.Manifest.permission.RECORD_AUDIO)
+                != PackageManager.PERMISSION_GRANTED) return;
+        if (checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)
+                == PackageManager.PERMISSION_GRANTED) return;
+        File asked = new File(getFilesDir(), "notifications_asked");
+        if (asked.exists()) return;
+        try {
+            asked.createNewFile();
+        } catch (IOException e) {
+            Log.w(TAG, "Failed to remember the notification request", e);
+        }
+        requestPermissions(new String[]{android.Manifest.permission.POST_NOTIFICATIONS},
+                NOTIFICATIONS_REQ_CODE);
+    }
+
+    private void shareDebugLog() {
+        new Thread(() -> {
+            try {
+                File log = DebugLog.export(this);
+                android.net.Uri uri = androidx.core.content.FileProvider.getUriForFile(
+                        this, getPackageName() + ".files", log);
+                Intent send = new Intent(Intent.ACTION_SEND)
+                        .setType("text/plain")
+                        .putExtra(Intent.EXTRA_STREAM, uri)
+                        .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                send.setClipData(android.content.ClipData.newRawUri(null, uri));
+                runOnUiThread(() -> {
+                    if (!isFinishing()) startActivity(Intent.createChooser(send, null));
+                });
+            } catch (Exception e) {
+                Log.e(TAG, "Couldn't share the debug log", e);
+                DebugLog.error(this, "log share failed", e);
+            }
+        }, "share-log").start();
     }
 
     // --- Benchmark ----------------------------------------------------------

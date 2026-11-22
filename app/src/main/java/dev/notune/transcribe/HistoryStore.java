@@ -12,7 +12,9 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -49,6 +51,10 @@ public final class HistoryStore {
     public static final String OUTCOME_UNCHANGED = "unchanged";
     public static final String OUTCOME_FAILED = "failed";
     public static final String OUTCOME_CANCELED = "canceled";
+    public static final String OUTCOME_RECORDING = "recording";
+    /** The process or service went away before the dictation finished. */
+    public static final String OUTCOME_INTERRUPTED = "interrupted";
+    public static final String OUTCOME_NO_SPEECH = "no_speech";
 
     // Settings, as marker/config files like the rest of the app's prefs.
     private static final String HISTORY_OFF = "history_off";
@@ -193,6 +199,169 @@ public final class HistoryStore {
         return id;
     }
 
+    /**
+     * Records a dictation that has just started, so that its audio is in the
+     * history whatever happens next. Returns the id, or null without audio.
+     */
+    public static String begin(Context ctx, String source, File audio) {
+        if (audio == null) return null;
+        final Context app = ctx.getApplicationContext();
+        final String id = UUID.randomUUID().toString();
+        final ContentValues v = new ContentValues();
+        v.put("id", id);
+        v.put("created", System.currentTimeMillis());
+        v.put("source", source);
+        v.put("raw_text", "");
+        v.put("final_text", "");
+        v.put("outcome", OUTCOME_RECORDING);
+        v.put("audio", audio.getName());
+        WRITER.execute(() -> {
+            try {
+                db(app).insert(TABLE, null, v);
+                prune(app);
+            } catch (RuntimeException e) {
+                DebugLog.error(app, "history begin failed", e);
+            }
+        });
+        return id;
+    }
+
+    /** Capture ended; what it contains isn't known yet. */
+    public static void stopped(Context ctx, String id, long durationMs, String outcome) {
+        ContentValues v = new ContentValues();
+        v.put("duration_ms", durationMs);
+        v.put("outcome", outcome);
+        update(ctx, id, v);
+    }
+
+    public static void transcribed(Context ctx, String id, String text) {
+        ContentValues v = new ContentValues();
+        v.put("raw_text", text);
+        v.put("final_text", text);
+        v.put("outcome", OUTCOME_PENDING);
+        v.putNull("note");
+        update(ctx, id, v);
+    }
+
+    private static void update(Context ctx, String id, ContentValues v) {
+        if (id == null) return;
+        final Context app = ctx.getApplicationContext();
+        WRITER.execute(() -> {
+            try {
+                db(app).update(TABLE, v, "id = ?", new String[]{id});
+            } catch (RuntimeException e) {
+                DebugLog.error(app, "history update failed", e);
+            }
+        });
+    }
+
+    /** Forgets a recording the user threw away, or one with nothing in it. */
+    public static void discard(Context ctx, String id, File audio) {
+        if (audio != null) audio.delete();
+        if (id == null) return;
+        final Context app = ctx.getApplicationContext();
+        WRITER.execute(() -> {
+            try {
+                db(app).delete(TABLE, "id = ?", new String[]{id});
+            } catch (RuntimeException e) {
+                DebugLog.error(app, "history discard failed", e);
+            }
+        });
+    }
+
+    /**
+     * Brings back what a killed keyboard process left behind: entries stuck
+     * mid-dictation, and recordings no entry points to (from older versions).
+     * Run once when the keyboard process starts; anything newer than
+     * {@code processStart} is a live dictation and is left alone.
+     */
+    public static void recover(Context ctx, long processStart) {
+        final Context app = ctx.getApplicationContext();
+        WRITER.execute(() -> {
+            try {
+                recoverUnfinished(app, processStart);
+                adoptStrayRecordings(app, processStart);
+            } catch (RuntimeException e) {
+                DebugLog.error(app, "history recovery failed", e);
+            }
+        });
+    }
+
+    private static void recoverUnfinished(Context ctx, long before) {
+        SQLiteDatabase db = db(ctx);
+        try (Cursor c = db.query(TABLE, new String[]{"id", "audio", "raw_text"},
+                "outcome IN (?, ?) AND source != ? AND created < ?",
+                new String[]{OUTCOME_RECORDING, OUTCOME_PENDING, SOURCE_OTHER_KEYBOARD,
+                        String.valueOf(before)},
+                null, null, null)) {
+            while (c.moveToNext()) {
+                String id = c.getString(0);
+                File audio = c.isNull(1) ? null : new File(audioDir(ctx), c.getString(1));
+                boolean hasText = !c.isNull(2) && !c.getString(2).isEmpty();
+                if (!hasText && !WavFiles.hasAudio(audio)) {
+                    if (audio != null) audio.delete();
+                    db.delete(TABLE, "id = ?", new String[]{id});
+                    continue;
+                }
+                ContentValues v = new ContentValues();
+                v.put("outcome", OUTCOME_INTERRUPTED);
+                if (WavFiles.hasAudio(audio)) {
+                    repair(ctx, audio);
+                    v.put("duration_ms", WavFiles.durationMs(audio));
+                }
+                db.update(TABLE, v, "id = ?", new String[]{id});
+                DebugLog.event(ctx, "history: recovered an interrupted dictation, "
+                        + WavFiles.durationMs(audio) + " ms");
+            }
+        }
+    }
+
+    private static void adoptStrayRecordings(Context ctx, long before) {
+        // List the files first: an entry is always inserted before its file can be this old.
+        File[] files = audioDir(ctx).listFiles();
+        if (files == null) return;
+        SQLiteDatabase db = db(ctx);
+        Set<String> known = new HashSet<>();
+        try (Cursor c = db.query(TABLE, new String[]{"audio"}, "audio IS NOT NULL",
+                null, null, null, null)) {
+            while (c.moveToNext()) known.add(c.getString(0));
+        }
+        for (File file : files) {
+            if (known.contains(file.getName()) || file.lastModified() >= before) continue;
+            if (!WavFiles.hasAudio(file)) {
+                file.delete();
+                continue;
+            }
+            if (file.getName().endsWith(".part")) {
+                // Left by versions that wrote the file in one go after recording.
+                File whole = new File(file.getPath().substring(0, file.getPath().length() - 5));
+                if (whole.exists() || !file.renameTo(whole)) continue;
+                file = whole;
+            }
+            repair(ctx, file);
+            long duration = WavFiles.durationMs(file);
+            ContentValues v = new ContentValues();
+            v.put("id", UUID.randomUUID().toString());
+            v.put("created", Math.max(0, file.lastModified() - duration));
+            v.put("duration_ms", duration);
+            v.put("source", SOURCE_DICTATION);
+            v.put("raw_text", "");
+            v.put("final_text", "");
+            v.put("outcome", OUTCOME_INTERRUPTED);
+            v.put("audio", file.getName());
+            db.insert(TABLE, null, v);
+            DebugLog.event(ctx, "history: adopted a stray recording, " + duration + " ms");
+        }
+    }
+
+    private static void repair(Context ctx, File audio) {
+        try {
+            WavFiles.repair(audio);
+        } catch (IOException e) {
+            DebugLog.error(ctx, "wav repair failed", e);
+        }
+    }
+
     /** Fills in the result once the text has gone somewhere. */
     public static void finish(Context ctx, String id, String finalText,
                               String originalText, String outcome, String note) {
@@ -263,16 +432,23 @@ public final class HistoryStore {
         return total;
     }
 
-    /** Drops recordings older than the retention period; the text stays. */
+    /**
+     * Drops recordings older than the retention period; the text stays. An
+     * entry that was only a recording goes with it.
+     */
     static void prune(Context ctx) {
         if (getAudioDays(ctx) <= KEEP_FOREVER) return;
         long cutoff = System.currentTimeMillis() - getAudioDays(ctx) * 24L * 60 * 60 * 1000;
         SQLiteDatabase db = db(ctx);
-        try (Cursor c = db.query(TABLE, new String[]{"id", "audio"},
+        try (Cursor c = db.query(TABLE, new String[]{"id", "audio", "raw_text"},
                 "audio IS NOT NULL AND created < ?", new String[]{String.valueOf(cutoff)},
                 null, null, null)) {
             while (c.moveToNext()) {
                 new File(audioDir(ctx), c.getString(1)).delete();
+                if (c.isNull(2) || c.getString(2).isEmpty()) {
+                    db.delete(TABLE, "id = ?", new String[]{c.getString(0)});
+                    continue;
+                }
                 ContentValues v = new ContentValues();
                 v.putNull("audio");
                 db.update(TABLE, v, "id = ?", new String[]{c.getString(0)});

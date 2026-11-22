@@ -14,8 +14,12 @@ import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
 import android.util.TypedValue;
+import android.content.BroadcastReceiver;
 import android.content.Context;
+import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.pm.PackageManager;
+import android.os.Build;
 import android.view.MotionEvent;
 import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.ExtractedText;
@@ -133,7 +137,29 @@ public class RustInputMethodService extends InputMethodService {
     private long captureStartedAt = 0;
     private long captureStoppedAt = 0;
     private File captureAudio = null;
+    /** The entry of the recording itself, until its text arrives. */
+    private String captureId = null;
+    /** The entry of the text being post-processed or delivered. */
     private String historyId = null;
+    /** True while the native side has the microphone open. */
+    private boolean capturing = false;
+    /** An empty result shorter than this is a stray tap and isn't kept. */
+    private static final long MIN_KEPT_EMPTY_MS = 1000;
+    private static boolean historyRecovered = false;
+    private final BroadcastReceiver stopReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            if (!capturing) return;
+            DebugLog.event(RustInputMethodService.this, "stop tapped in notification");
+            transcriptionPending = true;
+            stopCapture();
+            if (pauseAudioActive) {
+                audioPauser.abandon(RustInputMethodService.this);
+                pauseAudioActive = false;
+            }
+            updateRecordButtonUI(false);
+        }
+    };
     // Transcribed text that finished while its field wasn't focused (and,
     // if enabled, also went to the clipboard). The keyboard offers it in a
     // bar until it is inserted or dismissed. If the same field comes back
@@ -151,6 +177,18 @@ public class RustInputMethodService extends InputMethodService {
         super.onCreate();
         mainHandler = new Handler(Looper.getMainLooper());
         Log.d(TAG, "Service onCreate");
+        DebugLog.event(this, "keyboard service created");
+        if (!historyRecovered) {
+            // Once per process: a re-created service may still have a live transcription.
+            historyRecovered = true;
+            HistoryStore.recover(this, System.currentTimeMillis());
+        }
+        IntentFilter stopFilter = new IntentFilter(RecordingNotification.ACTION_STOP);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(stopReceiver, stopFilter, Context.RECEIVER_NOT_EXPORTED);
+        } else {
+            registerReceiver(stopReceiver, stopFilter);
+        }
         try {
             initNative(this);
         } catch (Throwable t) {
@@ -339,6 +377,7 @@ public class RustInputMethodService extends InputMethodService {
         super.onWindowShown();
         boolean wasVisible = windowVisible;
         windowVisible = true;
+        if (capturing) DebugLog.event(this, "keyboard shown while recording");
         if (isRecording) {
             // A background recording is still running (record-in-background
             // setting): restore the recording UI.
@@ -350,7 +389,9 @@ public class RustInputMethodService extends InputMethodService {
             // text area); never auto-start a recording from here.
             return;
         }
-        if (new File(getFilesDir(), "auto_record").exists()) {
+        // Not over a dictation that is still being transcribed or processed.
+        if (!transcriptionPending && !postProcessRunning
+                && new File(getFilesDir(), "auto_record").exists()) {
             if (checkSelfPermission(android.Manifest.permission.RECORD_AUDIO)
                     == PackageManager.PERMISSION_GRANTED) {
                 if (isPauseAudioEnabled()) {
@@ -373,16 +414,17 @@ public class RustInputMethodService extends InputMethodService {
     public void onWindowHidden() {
         super.onWindowHidden();
         windowVisible = false;
+        if (capturing) DebugLog.event(this, "keyboard hidden while recording");
         if (isRecording) {
             if (isStopOnHideEnabled()) {
                 // Opt-in behavior: discard the recording when the keyboard hides.
                 boolean fellBackToTranscription = false;
                 try {
-                    cancelRecording();
+                    cancelCapture();
                 } catch (Throwable t) {
                     Log.w(TAG, "cancelRecording failed, falling back to stopRecording", t);
                     try {
-                        stopRecording(null);
+                        stopCapture();
                         fellBackToTranscription = true;
                     } catch (Throwable ignored) { }
                 }
@@ -559,23 +601,63 @@ public class RustInputMethodService extends InputMethodService {
     private void startCapture() {
         recordingTargetKey = inputActive ? targetKey(getCurrentInputEditorInfo()) : null;
         captureStartedAt = System.currentTimeMillis();
-        captureAudio = null;
-        startRecording();
+        historyId = null;
+        // Before the microphone opens, and while the keyboard is still visible.
+        boolean foreground = RecordingNotification.start(this);
+        captureAudio = HistoryStore.newAudioFile(this);
+        captureId = HistoryStore.begin(this,
+                editSelectionNext ? HistoryStore.SOURCE_EDIT
+                        : postProcessNext ? HistoryStore.SOURCE_AI : HistoryStore.SOURCE_DICTATION,
+                captureAudio);
+        capturing = startRecording(
+                captureAudio == null ? null : captureAudio.getAbsolutePath());
+        DebugLog.event(this, "record start: ok=" + capturing + " foreground=" + foreground
+                + " saving=" + (captureAudio != null) + " ai=" + postProcessNext
+                + " edit=" + editSelectionNext);
+        if (!capturing) {
+            discardCapture();
+            RecordingNotification.stop(this);
+            // Posted, so it also undoes the recording look the caller is about to apply.
+            onStatusUpdate("Error: couldn't start recording");
+        }
     }
 
-    /** Stops capture for transcription, saving the audio if the history keeps it. */
+    /** Stops capture for transcription. The audio is already on disk. */
     private void stopCapture() {
         captureStoppedAt = System.currentTimeMillis();
-        captureAudio = HistoryStore.newAudioFile(this);
-        stopRecording(captureAudio == null ? null : captureAudio.getAbsolutePath());
+        stopRecording();
+        capturing = false;
+        HistoryStore.stopped(this, captureId, captureDurationMs(), HistoryStore.OUTCOME_PENDING);
+        RecordingNotification.showTranscribing(this);
+        DebugLog.event(this, "record stop: " + captureDurationMs() + " ms");
     }
 
-    /** Drops the saved recording of a dictation that produced no entry. */
-    private void discardCaptureAudio() {
-        if (captureAudio != null) {
-            captureAudio.delete();
-            captureAudio = null;
+    /** The user threw the recording away. */
+    private void cancelCapture() {
+        cancelRecording();
+        capturing = false;
+        discardCapture();
+        RecordingNotification.stop(this);
+        DebugLog.event(this, "record canceled");
+    }
+
+    private long captureDurationMs() {
+        return Math.max(0, captureStoppedAt - captureStartedAt);
+    }
+
+    private void discardCapture() {
+        HistoryStore.discard(this, captureId, captureAudio);
+        captureId = null;
+        captureAudio = null;
+    }
+
+    /** Keeps a recording that produced no text, unless there's nothing in it. */
+    private void keepCaptureWithoutText(String outcome, String note) {
+        if (!WavFiles.hasAudio(captureAudio)) {
+            discardCapture();
+            return;
         }
+        HistoryStore.finish(this, captureId, null, null, outcome, note);
     }
 
     /**
@@ -751,7 +833,20 @@ public class RustInputMethodService extends InputMethodService {
         super.onDestroy();
         if (mainHandler != null) mainHandler.removeCallbacks(expireUndo);
         llmGeneration++;
-        cleanupNative();
+        DebugLog.event(this, "keyboard service destroyed: recording=" + capturing
+                + " transcribing=" + transcriptionPending + " ai=" + postProcessRunning);
+        if (capturing) {
+            capturing = false;
+            captureStoppedAt = System.currentTimeMillis();
+            HistoryStore.stopped(this, captureId, captureDurationMs(),
+                    HistoryStore.OUTCOME_INTERRUPTED);
+        } else if (postProcessRunning) {
+            HistoryStore.finish(this, historyId, null, null,
+                    HistoryStore.OUTCOME_INTERRUPTED, null);
+        }
+        unregisterReceiver(stopReceiver);
+        RecordingNotification.stop(this);
+        cleanupNative(this);
         if (pauseAudioActive) {
             audioPauser.abandon(this);
             pauseAudioActive = false;
@@ -760,18 +855,39 @@ public class RustInputMethodService extends InputMethodService {
 
     // Native methods
     private native void initNative(RustInputMethodService service);
-    private native void cleanupNative();
-    private native void startRecording();
-    /** @param wavPath where to save the recording for the history, or null. */
-    private native void stopRecording(String wavPath);
+    private native void cleanupNative(RustInputMethodService self);
+    /**
+     * @param wavPath where to save the audio as it is recorded, or null.
+     * @return whether the microphone is capturing.
+     */
+    private native boolean startRecording(String wavPath);
+    private native void stopRecording();
     private native void cancelRecording();
+
+    // Called from Rust. Never carries recognized text.
+    public void onCaptureEvent(String event) {
+        DebugLog.event(this, event);
+    }
 
     // Called from Rust
     public void onStatusUpdate(String status) {
         mainHandler.post(() -> {
             Log.d(TAG, "Status: " + status);
+            if (status != null && status.startsWith("Error")) {
+                DebugLog.event(this, "status: " + status);
+                // Neither the engine failing to load while the mic records (it
+                // retries on stop) nor the fallback to the built-in model ends
+                // the dictation.
+                if (capturing || (transcriptionPending && status.startsWith("Error loading "))) {
+                    return;
+                }
+            }
             lastStatus = status;
             if (status != null && status.startsWith("Error")) {
+                if (transcriptionPending) {
+                    keepCaptureWithoutText(HistoryStore.OUTCOME_FAILED, status);
+                }
+                if (!postProcessRunning) RecordingNotification.stop(this);
                 isRecording = false;
                 if (inputView != null) inputView.setKeepScreenOn(false);
                 transcriptionPending = false;
@@ -853,22 +969,34 @@ public class RustInputMethodService extends InputMethodService {
             postProcessNext = false;
             editSelectionNext = false;
             transcriptionPending = false;
+            boolean empty = text == null || text.trim().isEmpty();
+            DebugLog.event(this, "transcribed: " + (empty ? 0 : text.length()) + " chars, "
+                    + (System.currentTimeMillis() - captureStoppedAt) + " ms after stop"
+                    + (discardNextTranscription ? ", canceled" : ""));
 
             if (discardNextTranscription) {
                 discardNextTranscription = false;
                 cancelRequested = false;
                 selectionToEdit = null;
-                discardCaptureAudio();
+                // Canceled while transcribing, often because it seemed stuck:
+                // not inserted, but not destroyed either.
+                if (!empty) HistoryStore.transcribed(this, captureId, text);
+                keepCaptureWithoutText(HistoryStore.OUTCOME_CANCELED, null);
                 pendingSwitchBack = false;
                 finishOperation(getString(R.string.ime_canceled));
                 return;
             }
 
-            if (text == null || text.trim().isEmpty()) {
+            if (empty) {
                 // Nothing recognized — don't insert a stray space, and don't
                 // spend an LLM round-trip on an empty string.
                 selectionToEdit = null;
-                discardCaptureAudio();
+                if (captureDurationMs() < MIN_KEPT_EMPTY_MS) {
+                    discardCapture();
+                } else {
+                    keepCaptureWithoutText(HistoryStore.OUTCOME_NO_SPEECH, null);
+                }
+                RecordingNotification.stop(this);
                 updateRecordButtonUI(false);
                 if (statusView != null) statusView.setText("Tap to Record");
                 if (pauseAudioActive) {
@@ -882,10 +1010,16 @@ public class RustInputMethodService extends InputMethodService {
                 return;
             }
 
-            historyId = HistoryStore.add(this,
-                    editSelection ? HistoryStore.SOURCE_EDIT
-                            : postProcess ? HistoryStore.SOURCE_AI : HistoryStore.SOURCE_DICTATION,
-                    text, captureAudio, Math.max(0, captureStoppedAt - captureStartedAt));
+            if (captureId != null) {
+                HistoryStore.transcribed(this, captureId, text);
+                historyId = captureId;
+            } else {
+                historyId = HistoryStore.add(this,
+                        editSelection ? HistoryStore.SOURCE_EDIT
+                                : postProcess ? HistoryStore.SOURCE_AI : HistoryStore.SOURCE_DICTATION,
+                        text, null, captureDurationMs());
+            }
+            captureId = null;
             captureAudio = null;
 
             if (editSelection) {
@@ -950,6 +1084,7 @@ public class RustInputMethodService extends InputMethodService {
                 mainHandler.post(() -> {
                     if (requestGeneration != llmGeneration) return;
                     postProcessRunning = false;
+                    DebugLog.event(RustInputMethodService.this, "ai post-processing failed");
                     Log.w(TAG, "Post-processing failed, inserting raw text: " + message);
                     deliverText(rawText, getString(R.string.ime_ai_failed, message));
                 });
@@ -990,6 +1125,7 @@ public class RustInputMethodService extends InputMethodService {
                     if (requestGeneration != llmGeneration) return;
                     postProcessRunning = false;
                     selectionToEdit = null;
+                    DebugLog.event(RustInputMethodService.this, "ai edit failed");
                     HistoryStore.finish(RustInputMethodService.this, historyId, null,
                             target.text, HistoryStore.OUTCOME_FAILED, message);
                     finishOperation(getString(R.string.ime_edit_failed, message));
@@ -1032,6 +1168,8 @@ public class RustInputMethodService extends InputMethodService {
             keepPendingText(committed);
             if (statusMessage == null) statusMessage = "Tap to Record";
         }
+        RecordingNotification.stop(this);
+        DebugLog.event(this, "delivered: toField=" + toField);
         if (pauseAudioActive) {
             audioPauser.abandon(this);
             pauseAudioActive = false;
@@ -1129,11 +1267,11 @@ public class RustInputMethodService extends InputMethodService {
         if (isRecording) {
             boolean fellBackToTranscription = false;
             try {
-                cancelRecording();
+                cancelCapture();
             } catch (Throwable t) {
                 Log.w(TAG, "Couldn't cancel recording", t);
                 try {
-                    stopRecording(null);
+                    stopCapture();
                     fellBackToTranscription = true;
                 } catch (Throwable stopError) {
                     Log.w(TAG, "Couldn't stop recording after cancel failed", stopError);
@@ -1262,6 +1400,8 @@ public class RustInputMethodService extends InputMethodService {
     }
 
     private void finishOperation(String message) {
+        // A cancel that has to wait for the transcription keeps the notification.
+        if (!capturing && !transcriptionPending) RecordingNotification.stop(this);
         isRecording = false;
         cancelRequested = false;
         if (inputView != null) inputView.setKeepScreenOn(false);

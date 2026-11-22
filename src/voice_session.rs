@@ -52,6 +52,33 @@ pub struct VoiceSessionState {
     /// recording ended.
     stream_tx: Arc<Mutex<Option<Sender<Vec<f32>>>>>,
     stream_worker: Option<StreamWorker>,
+    /// Feeds the recorder thread (see [`crate::audio::record`]). Taking the
+    /// sender out finishes the file.
+    record_tx: Arc<Mutex<Option<Sender<Vec<f32>>>>>,
+    recorder: Option<std::thread::JoinHandle<()>>,
+}
+
+impl Drop for VoiceSessionState {
+    fn drop(&mut self) {
+        // The service went away, possibly mid-recording: close the file.
+        self.stream = None;
+        self.session_active.store(false, Ordering::SeqCst);
+        self.record_tx.lock().unwrap().take();
+        abandon_stream(self);
+    }
+}
+
+/// Something for the debug log. Never pass recognized text here.
+fn notify_event(env: &mut JNIEnv, obj: &JObject, event: &str) {
+    if let Ok(jevent) = env.new_string(event) {
+        if env
+            .call_method(obj, "onCaptureEvent", "(Ljava/lang/String;)V", &[(&jevent).into()])
+            .is_err()
+        {
+            // The voice panel has no such callback.
+            let _ = env.exception_clear();
+        }
+    }
 }
 
 fn notify_status(env: &mut JNIEnv, obj: &JObject, msg: &str) {
@@ -111,6 +138,8 @@ pub fn init_session(env: JNIEnv, target: JObject) -> VoiceSessionState {
         session_active: Arc::new(AtomicBool::new(false)),
         stream_tx: Arc::new(Mutex::new(None)),
         stream_worker: None,
+        record_tx: Arc::new(Mutex::new(None)),
+        recorder: None,
     };
 
     // Load engine in background
@@ -127,8 +156,14 @@ pub fn init_session(env: JNIEnv, target: JObject) -> VoiceSessionState {
 /// Begin microphone capture. With `auto_stop` set, a monitor thread watches
 /// for trailing silence after speech (or a no-speech timeout) and invokes the
 /// Java-side `onAutoStop()` callback, which is expected to stop the recording
-/// the same way a manual tap would.
-pub fn start_recording(mut env: JNIEnv, state: &mut VoiceSessionState, auto_stop: bool) {
+/// the same way a manual tap would. With `wav_path`, the audio is saved there
+/// as it arrives. Returns whether the microphone is capturing.
+pub fn start_recording(
+    mut env: JNIEnv,
+    state: &mut VoiceSessionState,
+    auto_stop: bool,
+    wav_path: Option<String>,
+) -> bool {
     let host = cpal::default_host();
     let device = match host.default_input_device() {
         Some(d) => d,
@@ -138,7 +173,7 @@ pub fn start_recording(mut env: JNIEnv, state: &mut VoiceSessionState, auto_stop
                 state.target_ref.as_obj(),
                 "Error: no microphone available. Check permissions.",
             );
-            return;
+            return false;
         }
     };
 
@@ -174,11 +209,18 @@ pub fn start_recording(mut env: JNIEnv, state: &mut VoiceSessionState, auto_stop
     let last_sent = state.last_level_sent.clone();
     let endpoint_cb = endpoint.clone();
     let stream_tx = state.stream_tx.clone();
+    start_recorder(&mut env, state, wav_path);
+    let record_tx = state.record_tx.clone();
+    let err_jvm = state.jvm.clone();
+    let err_target = state.target_ref.clone();
 
     let stream = device.build_input_stream(
         &config,
         move |data: &[f32], _: &_| {
             buffer_clone.lock().unwrap().extend_from_slice(data);
+            if let Some(tx) = record_tx.lock().unwrap().as_ref() {
+                let _ = tx.send(data.to_vec());
+            }
             if let Some(tx) = stream_tx.lock().unwrap().as_ref() {
                 let _ = tx.send(data.to_vec());
             }
@@ -215,13 +257,20 @@ pub fn start_recording(mut env: JNIEnv, state: &mut VoiceSessionState, auto_stop
                 }
             }
         },
-        |e| log::error!("Stream err: {}", e),
+        move |e| {
+            log::error!("Stream err: {}", e);
+            if let Ok(mut env) = err_jvm.attach_current_thread() {
+                notify_event(&mut env, err_target.as_obj(), &format!("mic stream error: {e}"));
+            }
+        },
         None,
     );
 
+    let stream = stream
+        .map_err(|e| e.to_string())
+        .and_then(|s| s.play().map(|_| s).map_err(|e| e.to_string()));
     match stream {
         Ok(s) => {
-            s.play().ok();
             state.stream = Some(SendStream(s));
             notify_status(&mut env, state.target_ref.as_obj(), "Listening...");
 
@@ -258,14 +307,17 @@ pub fn start_recording(mut env: JNIEnv, state: &mut VoiceSessionState, auto_stop
                     }
                 });
             }
+            true
         }
         Err(e) => {
             abandon_stream(state);
+            state.record_tx.lock().unwrap().take();
             notify_status(
                 &mut env,
                 state.target_ref.as_obj(),
                 &format!("Error: failed to open microphone: {}", e),
             );
+            false
         }
     }
 }
@@ -309,6 +361,29 @@ fn start_stream(state: &mut VoiceSessionState) {
     });
 }
 
+/// Starts the thread that saves the audio and watches for a muted mic.
+fn start_recorder(env: &mut JNIEnv, state: &mut VoiceSessionState, path: Option<String>) {
+    // Created right here, so that a cancel can't delete the file before it exists.
+    let wav = path.and_then(|p| match crate::audio::WavWriter::create(&p, 16_000) {
+        Ok(writer) => Some(writer),
+        Err(e) => {
+            notify_event(env, state.target_ref.as_obj(), &format!("can't create audio file: {e}"));
+            None
+        }
+    });
+    let (tx, rx) = mpsc::channel();
+    let jvm = state.jvm.clone();
+    let target = state.target_ref.clone();
+    *state.record_tx.lock().unwrap() = Some(tx);
+    state.recorder = Some(std::thread::spawn(move || {
+        crate::audio::record(rx, wav, 16_000, |event| {
+            if let Ok(mut env) = jvm.attach_current_thread() {
+                notify_event(&mut env, target.as_obj(), event);
+            }
+        });
+    }));
+}
+
 /// Ends the streaming worker without a result.
 fn abandon_stream(state: &mut VoiceSessionState) {
     if let Some(worker) = state.stream_worker.take() {
@@ -317,15 +392,17 @@ fn abandon_stream(state: &mut VoiceSessionState) {
     state.stream_tx.lock().unwrap().take();
 }
 
-/// Stops capture and transcribes. With `wav_path`, the recording is also
-/// saved there (for the history) before transcription starts, so the file is
-/// complete by the time `onTextTranscribed` fires.
-pub fn stop_recording(mut env: JNIEnv, state: &mut VoiceSessionState, wav_path: Option<String>) {
+/// Stops capture and transcribes. The saved recording, if any, is complete
+/// before transcription starts.
+pub fn stop_recording(mut env: JNIEnv, state: &mut VoiceSessionState) {
     // Drop the stream to stop recording; end the auto-stop monitor if running.
     state.session_active.store(false, Ordering::SeqCst);
     state.stream = None;
 
-    let buffer = state.audio_buffer.lock().unwrap().clone();
+    state.record_tx.lock().unwrap().take();
+    let recorder = state.recorder.take();
+    // Moved, not copied: this runs on the UI thread, and an hour is 230 MB.
+    let buffer = std::mem::take(&mut *state.audio_buffer.lock().unwrap());
 
     // Guard against empty buffer (mic permission denied, instant stop, etc.)
     if buffer.is_empty() {
@@ -354,10 +431,8 @@ pub fn stop_recording(mut env: JNIEnv, state: &mut VoiceSessionState, wav_path: 
         };
         let obj = target_ref.as_obj();
 
-        if let Some(path) = wav_path {
-            if let Err(e) = crate::audio::write_wav(&path, &buffer, 16_000) {
-                log::warn!("couldn't save recording to {}: {}", path, e);
-            }
+        if let Some(recorder) = recorder {
+            let _ = recorder.join();
         }
 
         if let Some(worker) = worker {
@@ -400,6 +475,8 @@ pub fn cancel_recording(mut env: JNIEnv, state: &mut VoiceSessionState) {
     state.session_active.store(false, Ordering::SeqCst);
     state.stream = None;
     abandon_stream(state);
-    state.audio_buffer.lock().unwrap().clear();
+    state.record_tx.lock().unwrap().take();
+    state.recorder = None;
+    *state.audio_buffer.lock().unwrap() = Vec::new();
     notify_status(&mut env, state.target_ref.as_obj(), "Canceled");
 }
