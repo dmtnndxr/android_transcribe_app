@@ -201,11 +201,10 @@ public class RustInputMethodService extends InputMethodService {
         IntentFilter actions = new IntentFilter(RecordingNotification.ACTION_STOP);
         actions.addAction(RecordingNotification.ACTION_CANCEL);
         actions.addAction(RecordingNotification.ACTION_DISMISSED);
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            registerReceiver(notificationReceiver, actions, Context.RECEIVER_NOT_EXPORTED);
-        } else {
-            registerReceiver(notificationReceiver, actions);
-        }
+        // Not a plain registerReceiver: before Android 13 that lets any app send
+        // Cancel and throw the recording away. This guards it with a permission.
+        androidx.core.content.ContextCompat.registerReceiver(this, notificationReceiver, actions,
+                androidx.core.content.ContextCompat.RECEIVER_NOT_EXPORTED);
         try {
             initNative(this);
         } catch (Throwable t) {
